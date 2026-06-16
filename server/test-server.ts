@@ -8,6 +8,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const PORT = 8080
 
+type SessionStatus = 'pending' | 'in_progress' | 'resolved'
+
 interface VisitorSession {
   visitorId: string
   visitorName: string
@@ -15,6 +17,8 @@ interface VisitorSession {
   online: boolean
   lastSeen: number
   messages: any[]
+  sessionStatus: SessionStatus
+  messageIds: Set<string>
 }
 
 interface Agent {
@@ -75,6 +79,7 @@ function handleAgentConnection(ws: WebSocket) {
     lastSeen: s.lastSeen,
     messages: s.messages,
     lastMessage: s.messages.length > 0 ? s.messages[s.messages.length - 1] : null,
+    sessionStatus: s.sessionStatus,
   }))
 
   ws.send(JSON.stringify({
@@ -100,7 +105,7 @@ function handleAgentConnection(ws: WebSocket) {
             status: 'delivered' as const,
           }
 
-          session.messages.push({ ...chatMsg, visitorId })
+          addMessageToSession(session, { ...chatMsg, visitorId })
           session.lastSeen = Date.now()
 
           if (session.ws && session.ws.readyState === WebSocket.OPEN) {
@@ -113,6 +118,16 @@ function handleAgentConnection(ws: WebSocket) {
           broadcastToAgents({
             action: 'message',
             payload: { ...chatMsg, visitorId, visitorName: session.visitorName },
+          }, ws)
+        }
+      } else if (msg.action === 'session_status_update' && msg.payload) {
+        const { visitorId, sessionStatus } = msg.payload
+        const session = sessions.get(visitorId)
+        if (session) {
+          session.sessionStatus = sessionStatus
+          broadcastToAgents({
+            action: 'session_status',
+            payload: { visitorId, sessionStatus },
           }, ws)
         }
       } else if (msg.action === 'typing_start' && msg.payload) {
@@ -148,6 +163,13 @@ function handleAgentConnection(ws: WebSocket) {
   })
 }
 
+function addMessageToSession(session: VisitorSession, msg: any) {
+  if (!session.messageIds.has(msg.id)) {
+    session.messageIds.add(msg.id)
+    session.messages.push(msg)
+  }
+}
+
 function handleVisitorConnection(ws: WebSocket) {
   let visitorId = ''
   let visitorName = '访客'
@@ -173,7 +195,10 @@ function handleVisitorConnection(ws: WebSocket) {
           if (session.messages.length > 0) {
             ws.send(JSON.stringify({
               action: 'session_history',
-              payload: session.messages,
+              payload: {
+                messages: session.messages,
+                lastMessageId: session.messages[session.messages.length - 1]?.id,
+              },
             }))
           }
         } else {
@@ -184,6 +209,8 @@ function handleVisitorConnection(ws: WebSocket) {
             online: true,
             lastSeen: Date.now(),
             messages: [],
+            sessionStatus: 'pending',
+            messageIds: new Set(),
           }
           sessions.set(visitorId, session)
         }
@@ -195,6 +222,7 @@ function handleVisitorConnection(ws: WebSocket) {
             visitorName,
             online: true,
             lastMessage: session.messages.length > 0 ? session.messages[session.messages.length - 1] : null,
+            sessionStatus: session.sessionStatus,
           },
         })
 
@@ -221,14 +249,10 @@ function handleVisitorConnection(ws: WebSocket) {
               online: true,
               lastSeen: Date.now(),
               messages: [],
+              sessionStatus: 'pending',
+              messageIds: new Set(),
             })
           }
-        }
-
-        const chatMsg = {
-          ...payload,
-          status: 'delivered' as const,
-          read: true,
         }
 
         ws.send(JSON.stringify({
@@ -238,9 +262,15 @@ function handleVisitorConnection(ws: WebSocket) {
 
         console.log(`收到访客[${visitorName}(${visitorId})]消息:`, payload.type, (payload.content || '').substring(0, 50))
 
+        const chatMsg = {
+          ...payload,
+          status: 'delivered' as const,
+          read: true,
+        }
+
         const session = sessions.get(visitorId)
         if (session) {
-          session.messages.push({ ...chatMsg, visitorId })
+          addMessageToSession(session, { ...chatMsg, visitorId })
           session.lastSeen = Date.now()
         }
 
@@ -279,7 +309,7 @@ function handleVisitorConnection(ws: WebSocket) {
               }))
 
               if (session) {
-                session.messages.push({ ...agentMsg, visitorId })
+                addMessageToSession(session, { ...agentMsg, visitorId })
                 session.lastSeen = Date.now()
               }
 
@@ -351,4 +381,5 @@ server.listen(PORT, () => {
   console.log(`3. 在访客端发消息，客服端可以看到并回复`)
   console.log(`4. 断开服务器模拟断网，再重连查看自动补发`)
   console.log(`5. 客服输入时会发送 typing 事件，访客端显示输入提示`)
+  console.log(`6. 可搜索/筛选访客，切换会话处理状态`)
 })

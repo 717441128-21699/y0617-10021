@@ -1,10 +1,13 @@
 import { useEffect, useRef, useCallback } from 'react'
-import type { ChatMessage, WSMessage } from '../types'
+import type { ChatMessage, WSMessage, SessionHistoryPayload } from '../types'
 import { useWidgetStore } from '../store/widgetStore'
 import {
   getPendingMessages,
   addMessage as idbAddMessage,
+  addMessageIfMissing as idbAddMessageIfMissing,
   updateMessageStatus as idbUpdateMessageStatus,
+  markMessagesAsRead,
+  getUnreadCount,
 } from '../utils/idb'
 
 const ACK_TIMEOUT_MS = 10000
@@ -23,7 +26,9 @@ export function useWebSocket() {
   const pendingAcksRef = useRef<Map<string, PendingAck>>(new Map())
   const isFlushingRef = useRef(false)
   const sentMessageIdsRef = useRef<Set<string>>(new Set())
+  const ackedMessageIdsRef = useRef<Set<string>>(new Set())
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const localMessageIdsRef = useRef<Set<string>>(new Set())
 
   const wsUrl = useWidgetStore((s) => s.config.wsUrl)
   const config = useWidgetStore((s) => s.config)
@@ -33,6 +38,7 @@ export function useWebSocket() {
   const updateMessageStatus = useWidgetStore((s) => s.updateMessageStatus)
   const incrementUnread = useWidgetStore((s) => s.incrementUnread)
   const setAgentTyping = useWidgetStore((s) => s.setAgentTyping)
+  const setUnreadCount = useWidgetStore((s) => s.setUnreadCount)
 
   useEffect(() => {
     isOpenRef.current = isOpen
@@ -67,13 +73,14 @@ export function useWebSocket() {
       clearTimeout(pending.timeoutId)
       pendingAcksRef.current.delete(messageId)
     }
+    ackedMessageIdsRef.current.add(messageId)
+    sentMessageIdsRef.current.add(messageId)
     updateMessageStatus(messageId, 'delivered')
     idbUpdateMessageStatus(messageId, 'delivered')
-    sentMessageIdsRef.current.add(messageId)
   }, [updateMessageStatus])
 
   const markMessageFailed = useCallback((messageId: string) => {
-    const pending = pendingAcksRef.current.get(messageId)
+    if (ackedMessageIdsRef.current.has(messageId)) return
     pendingAcksRef.current.delete(messageId)
     updateMessageStatus(messageId, 'failed')
     idbUpdateMessageStatus(messageId, 'failed')
@@ -89,9 +96,17 @@ export function useWebSocket() {
         if (!mountedRef.current) break
         if (wsRef.current?.readyState !== WebSocket.OPEN) break
 
-        if (sentMessageIdsRef.current.has(msg.id)) {
+        if (ackedMessageIdsRef.current.has(msg.id)) {
           updateMessageStatus(msg.id, 'delivered')
           idbUpdateMessageStatus(msg.id, 'delivered')
+          continue
+        }
+
+        if (sentMessageIdsRef.current.has(msg.id)) {
+          const timeoutId = setTimeout(() => {
+            markMessageFailed(msg.id)
+          }, ACK_TIMEOUT_MS)
+          pendingAcksRef.current.set(msg.id, { timeoutId, retried: false })
           continue
         }
 
@@ -101,11 +116,11 @@ export function useWebSocket() {
             updateMessageStatus(msg.id, 'sending')
             idbUpdateMessageStatus(msg.id, 'sending')
 
+            sentMessageIdsRef.current.add(msg.id)
             const timeoutId = setTimeout(() => {
               markMessageFailed(msg.id)
             }, ACK_TIMEOUT_MS)
             pendingAcksRef.current.set(msg.id, { timeoutId, retried: false })
-            sentMessageIdsRef.current.add(msg.id)
           } else {
             updateMessageStatus(msg.id, 'failed')
             idbUpdateMessageStatus(msg.id, 'failed')
@@ -121,6 +136,16 @@ export function useWebSocket() {
       isFlushingRef.current = false
     }
   }, [sendViaWebSocket, updateMessageStatus, markMessageFailed])
+
+  const syncUnreadFromHistory = useCallback(async (newAgentMsgCount: number) => {
+    if (isOpenRef.current) {
+      await markMessagesAsRead('agent')
+      setUnreadCount(0)
+    } else {
+      const count = await getUnreadCount()
+      setUnreadCount(count)
+    }
+  }, [setUnreadCount])
 
   const sendMessage = useCallback(
     (message: ChatMessage) => {
@@ -139,6 +164,7 @@ export function useWebSocket() {
         enriched.status = 'pending'
       }
 
+      localMessageIdsRef.current.add(enriched.id)
       addMessage(enriched)
       idbAddMessage(enriched)
 
@@ -164,9 +190,19 @@ export function useWebSocket() {
 
   const retryMessage = useCallback(
     (message: ChatMessage) => {
-      if (sentMessageIdsRef.current.has(message.id)) {
+      if (ackedMessageIdsRef.current.has(message.id)) {
         updateMessageStatus(message.id, 'delivered')
         idbUpdateMessageStatus(message.id, 'delivered')
+        return
+      }
+
+      if (sentMessageIdsRef.current.has(message.id)) {
+        updateMessageStatus(message.id, 'sending')
+        idbUpdateMessageStatus(message.id, 'sending')
+        const timeoutId = setTimeout(() => {
+          markMessageFailed(message.id)
+        }, ACK_TIMEOUT_MS)
+        pendingAcksRef.current.set(message.id, { timeoutId, retried: true })
         return
       }
 
@@ -268,10 +304,13 @@ export function useWebSocket() {
 
           pendingAcksRef.current.forEach((p, id) => {
             clearTimeout(p.timeoutId)
-            updateMessageStatus(id, 'pending')
-            idbUpdateMessageStatus(id, 'pending')
+            if (!ackedMessageIdsRef.current.has(id)) {
+              updateMessageStatus(id, 'pending')
+              idbUpdateMessageStatus(id, 'pending')
+            }
           })
           pendingAcksRef.current.clear()
+          sentMessageIdsRef.current.clear()
 
           setAgentTyping(false)
           scheduleReconnect()
@@ -304,11 +343,14 @@ export function useWebSocket() {
 
             if (data.action === 'message' && data.payload && 'type' in data.payload) {
               const payload = data.payload as ChatMessage
+              if (localMessageIdsRef.current.has(payload.id)) return
+
               const msg: ChatMessage = {
                 ...payload,
                 read: isOpenRef.current,
                 status: 'delivered',
               }
+              localMessageIdsRef.current.add(msg.id)
               addMessage(msg)
               idbAddMessage(msg)
 
@@ -319,12 +361,32 @@ export function useWebSocket() {
               }
             }
 
-            if (data.action === 'session_history' && Array.isArray(data.payload)) {
-              const history = data.payload as ChatMessage[]
-              history.forEach((h) => {
-                addMessage({ ...h, status: h.status || 'delivered' })
-                idbAddMessage({ ...h, status: h.status || 'delivered' })
-              })
+            if (data.action === 'session_history' && data.payload && typeof data.payload === 'object') {
+              const historyPayload = data.payload as SessionHistoryPayload
+              const history = historyPayload.messages || (Array.isArray(data.payload) ? data.payload as ChatMessage[] : [])
+              let newAgentMsgCount = 0
+
+              for (const h of history) {
+                if (localMessageIdsRef.current.has(h.id)) continue
+                localMessageIdsRef.current.add(h.id)
+
+                const msg: ChatMessage = {
+                  ...h,
+                  status: h.status || 'delivered',
+                  read: isOpenRef.current,
+                }
+
+                addMessage(msg)
+                idbAddMessageIfMissing(msg)
+
+                if (msg.sender === 'agent' && !isOpenRef.current) {
+                  newAgentMsgCount++
+                }
+              }
+
+              if (newAgentMsgCount > 0) {
+                syncUnreadFromHistory(newAgentMsgCount)
+              }
             }
           } catch {
             // ignore malformed messages
@@ -359,7 +421,7 @@ export function useWebSocket() {
         wsRef.current = null
       }
     }
-  }, [wsUrl, setConnectionStatus, addMessage, updateMessageStatus, incrementUnread, handleMessageAck, handleTypingEvent, flushPendingMessages, config.visitorId, config.visitorName])
+  }, [wsUrl, setConnectionStatus, addMessage, updateMessageStatus, incrementUnread, handleMessageAck, handleTypingEvent, flushPendingMessages, syncUnreadFromHistory, config.visitorId, config.visitorName])
 
   const disconnect = useCallback(() => {
     if (reconnectTimerRef.current) {

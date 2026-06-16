@@ -67,6 +67,20 @@ export async function addMessage(message: ChatMessage): Promise<void> {
   await db.put('messages', message)
 }
 
+export async function hasMessage(id: string): Promise<boolean> {
+  const db = await getDB()
+  const existing = await db.get('messages', id)
+  return !!existing
+}
+
+export async function addMessageIfMissing(message: ChatMessage): Promise<boolean> {
+  const db = await getDB()
+  const existing = await db.get('messages', message.id)
+  if (existing) return false
+  await db.put('messages', message)
+  return true
+}
+
 export async function updateMessageStatus(id: string, status: MessageStatus): Promise<void> {
   const db = await getDB()
   const tx = db.transaction('messages', 'readwrite')

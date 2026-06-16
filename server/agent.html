@@ -13,19 +13,52 @@
       display: flex;
     }
     .sidebar {
-      width: 280px;
+      width: 320px;
       background: #1f2937;
       color: white;
-      padding: 20px 0;
       display: flex;
       flex-direction: column;
     }
-    .sidebar h2 {
-      padding: 0 20px 16px;
-      font-size: 16px;
-      font-weight: 600;
+    .sidebar-header {
+      padding: 16px 20px 12px;
       border-bottom: 1px solid #374151;
     }
+    .sidebar-header h2 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+    .search-box {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #4b5563;
+      border-radius: 6px;
+      background: #374151;
+      color: white;
+      font-size: 13px;
+      outline: none;
+    }
+    .search-box::placeholder { color: #9ca3af; }
+    .search-box:focus { border-color: #6366f1; }
+    .filter-bar {
+      display: flex;
+      gap: 4px;
+      padding: 8px 20px;
+      border-bottom: 1px solid #374151;
+      flex-wrap: wrap;
+    }
+    .filter-btn {
+      padding: 4px 10px;
+      border: 1px solid #4b5563;
+      border-radius: 4px;
+      background: transparent;
+      color: #9ca3af;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .filter-btn:hover { border-color: #6366f1; color: #c7d2fe; }
+    .filter-btn.active { background: #4f46e5; border-color: #4f46e5; color: white; }
     .visitor-list {
       flex: 1;
       overflow-y: auto;
@@ -39,13 +72,8 @@
       align-items: center;
       gap: 10px;
     }
-    .visitor-item:hover {
-      background: #374151;
-    }
-    .visitor-item.active {
-      background: #374151;
-      border-left-color: #4f46e5;
-    }
+    .visitor-item:hover { background: #374151; }
+    .visitor-item.active { background: #374151; border-left-color: #4f46e5; }
     .visitor-avatar {
       width: 36px;
       height: 36px;
@@ -59,30 +87,18 @@
       flex-shrink: 0;
       position: relative;
     }
-    .visitor-avatar .online-dot {
+    .visitor-avatar .online-dot, .visitor-avatar .offline-dot {
       position: absolute;
       bottom: 0;
       right: 0;
       width: 10px;
       height: 10px;
       border-radius: 50%;
-      background: #22c55e;
       border: 2px solid #1f2937;
     }
-    .visitor-avatar .offline-dot {
-      position: absolute;
-      bottom: 0;
-      right: 0;
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: #6b7280;
-      border: 2px solid #1f2937;
-    }
-    .visitor-info {
-      flex: 1;
-      min-width: 0;
-    }
+    .visitor-avatar .online-dot { background: #22c55e; }
+    .visitor-avatar .offline-dot { background: #6b7280; }
+    .visitor-info { flex: 1; min-width: 0; }
     .visitor-name {
       font-size: 14px;
       font-weight: 500;
@@ -91,20 +107,17 @@
       align-items: center;
       gap: 6px;
     }
-    .visitor-name .online-tag {
+    .visitor-name .tag {
       font-size: 10px;
-      background: #22c55e;
-      color: white;
       padding: 1px 5px;
       border-radius: 3px;
-    }
-    .visitor-name .offline-tag {
-      font-size: 10px;
-      background: #6b7280;
       color: white;
-      padding: 1px 5px;
-      border-radius: 3px;
     }
+    .tag-online { background: #22c55e; }
+    .tag-offline { background: #6b7280; }
+    .tag-pending { background: #f59e0b; }
+    .tag-in_progress { background: #3b82f6; }
+    .tag-resolved { background: #22c55e; }
     .visitor-last-msg {
       font-size: 12px;
       opacity: 0.6;
@@ -112,8 +125,15 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
+    .visitor-id-preview {
+      font-size: 10px;
+      opacity: 0.4;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
     .controls {
-      padding: 16px 20px;
+      padding: 12px 20px;
       border-top: 1px solid #374151;
     }
     .toggle-btn {
@@ -125,19 +145,9 @@
       cursor: pointer;
       transition: all 0.15s;
     }
-    .toggle-btn.on {
-      background: #22c55e;
-      color: white;
-    }
-    .toggle-btn.off {
-      background: #6b7280;
-      color: white;
-    }
-    .main {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-    }
+    .toggle-btn.on { background: #22c55e; color: white; }
+    .toggle-btn.off { background: #6b7280; color: white; }
+    .main { flex: 1; display: flex; flex-direction: column; }
     .header {
       background: white;
       padding: 16px 24px;
@@ -146,10 +156,7 @@
       align-items: center;
       justify-content: space-between;
     }
-    .header h3 {
-      font-size: 16px;
-      font-weight: 600;
-    }
+    .header h3 { font-size: 16px; font-weight: 600; }
     .status {
       display: flex;
       align-items: center;
@@ -157,14 +164,29 @@
       font-size: 13px;
       color: #6b7280;
     }
-    .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: #22c55e;
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; }
+    .status-dot.disconnected { background: #ef4444; }
+    .visitor-preview {
+      padding: 0 24px;
+      background: #eef2ff;
+      border-bottom: 1px solid #c7d2fe;
+      color: #4338ca;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
     }
-    .status-dot.disconnected {
-      background: #ef4444;
+    .visitor-preview p { padding: 8px 0; }
+    .session-status-select {
+      padding: 4px 8px;
+      border: 1px solid #c7d2fe;
+      border-radius: 4px;
+      background: white;
+      color: #4338ca;
+      font-size: 12px;
+      cursor: pointer;
+      outline: none;
     }
     .chat-area {
       flex: 1;
@@ -177,13 +199,8 @@
       overflow-y: auto;
       padding: 20px;
     }
-    .message {
-      max-width: 70%;
-      margin-bottom: 12px;
-    }
-    .message.visitor {
-      margin-left: auto;
-    }
+    .message { max-width: 70%; margin-bottom: 12px; }
+    .message.visitor { margin-left: auto; }
     .message-bubble {
       padding: 10px 14px;
       border-radius: 12px;
@@ -201,20 +218,9 @@
       border: 1px solid #e5e7eb;
       border-bottom-left-radius: 4px;
     }
-    .message-meta {
-      font-size: 11px;
-      color: #9ca3af;
-      margin-top: 4px;
-      padding: 0 4px;
-    }
-    .message.visitor .message-meta {
-      text-align: right;
-    }
-    .message-type-indicator {
-      font-size: 11px;
-      padding: 0 4px 4px;
-      opacity: 0.6;
-    }
+    .message-meta { font-size: 11px; color: #9ca3af; margin-top: 4px; padding: 0 4px; }
+    .message.visitor .message-meta { text-align: right; }
+    .message-type-indicator { font-size: 11px; padding: 0 4px 4px; opacity: 0.6; }
     .input-area {
       background: white;
       padding: 16px 24px;
@@ -234,9 +240,7 @@
       min-height: 40px;
       max-height: 120px;
     }
-    .input-area textarea:focus {
-      border-color: #4f46e5;
-    }
+    .input-area textarea:focus { border-color: #4f46e5; }
     .input-area button {
       padding: 0 24px;
       background: #4f46e5;
@@ -248,13 +252,8 @@
       cursor: pointer;
       transition: opacity 0.15s;
     }
-    .input-area button:hover {
-      opacity: 0.9;
-    }
-    .input-area button:disabled {
-      background: #d1d5db;
-      cursor: not-allowed;
-    }
+    .input-area button:hover { opacity: 0.9; }
+    .input-area button:disabled { background: #d1d5db; cursor: not-allowed; }
     .empty-state {
       flex: 1;
       display: flex;
@@ -263,39 +262,40 @@
       color: #9ca3af;
       font-size: 14px;
     }
-    .visitor-preview {
-      padding: 0 24px;
-      background: #eef2ff;
-      border-bottom: 1px solid #c7d2fe;
-      color: #4338ca;
-      font-size: 12px;
-      display: flex;
-      align-items: center;
-      gap: 16px;
-    }
-    .visitor-preview p {
-      padding: 8px 0;
-    }
     .typing-indicator {
       padding: 4px 20px;
       font-size: 12px;
       color: #6b7280;
       font-style: italic;
     }
+    .no-results {
+      padding: 20px;
+      text-align: center;
+      color: #6b7280;
+      font-size: 13px;
+    }
   </style>
 </head>
 <body>
   <div class="sidebar">
-    <h2>💬 客服控制台</h2>
+    <div class="sidebar-header">
+      <h2>💬 客服控制台</h2>
+      <input type="text" class="search-box" id="searchBox" placeholder="搜索访客名、ID 或消息内容..." />
+    </div>
+    <div class="filter-bar">
+      <button class="filter-btn active" data-filter="all">全部</button>
+      <button class="filter-btn" data-filter="online">在线</button>
+      <button class="filter-btn" data-filter="offline">离线</button>
+      <button class="filter-btn" data-filter="unreplied">未回复</button>
+      <button class="filter-btn" data-filter="pending">待处理</button>
+      <button class="filter-btn" data-filter="in_progress">跟进中</button>
+      <button class="filter-btn" data-filter="resolved">已解决</button>
+    </div>
     <div class="visitor-list" id="visitorList">
-      <div style="padding: 20px; text-align: center; color: #6b7280; font-size: 13px;">
-        暂无访客
-      </div>
+      <div class="no-results">暂无访客</div>
     </div>
     <div class="controls">
-      <button class="toggle-btn on" id="autoReplyToggle">
-        自动回复：开启
-      </button>
+      <button class="toggle-btn on" id="autoReplyToggle">自动回复：开启</button>
     </div>
   </div>
 
@@ -308,8 +308,13 @@
       </div>
     </div>
     <div class="visitor-preview" id="visitorPreview" style="display: none;">
-      <p>访客信息：<span id="visitorInfo"></span></p>
+      <p>访客：<span id="visitorInfo"></span></p>
       <p>状态：<span id="visitorStatus"></span></p>
+      <p>会话：<select class="session-status-select" id="sessionStatusSelect">
+        <option value="pending">待处理</option>
+        <option value="in_progress">跟进中</option>
+        <option value="resolved">已解决</option>
+      </select></p>
     </div>
     <div class="chat-area">
       <div class="message-list" id="messageList">
@@ -329,6 +334,8 @@
     let currentVisitorId = null;
     let autoReplyEnabled = true;
     let typingTimeout = null;
+    let currentFilter = 'all';
+    let searchQuery = '';
 
     const visitorListEl = document.getElementById('visitorList');
     const messageListEl = document.getElementById('messageList');
@@ -342,6 +349,8 @@
     const visitorInfoEl = document.getElementById('visitorInfo');
     const visitorStatusEl = document.getElementById('visitorStatus');
     const typingIndicatorEl = document.getElementById('typingIndicator');
+    const sessionStatusSelectEl = document.getElementById('sessionStatusSelect');
+    const searchBoxEl = document.getElementById('searchBox');
 
     ws.onopen = () => {
       statusDotEl.className = 'status-dot';
@@ -364,6 +373,7 @@
             online: v.online || false,
             lastSeen: v.lastSeen || 0,
             messages: v.messages || [],
+            sessionStatus: v.sessionStatus || 'pending',
           });
         });
         renderVisitorList();
@@ -377,11 +387,15 @@
             online: true,
             lastSeen: Date.now(),
             messages: [],
+            sessionStatus: 'pending',
           });
         }
 
-        visitors.get(visitorId).messages.push(msg);
-        visitors.get(visitorId).lastSeen = Date.now();
+        const visitor = visitors.get(visitorId);
+        if (!visitor.messages.some(m => m.id === msg.id)) {
+          visitor.messages.push(msg);
+        }
+        visitor.lastSeen = Date.now();
         renderVisitorList();
 
         if (visitorId === currentVisitorId) {
@@ -392,12 +406,16 @@
         if (visitors.has(payload.visitorId)) {
           visitors.get(payload.visitorId).online = true;
           visitors.get(payload.visitorId).lastSeen = Date.now();
+          if (payload.sessionStatus) {
+            visitors.get(payload.visitorId).sessionStatus = payload.sessionStatus;
+          }
         } else {
           visitors.set(payload.visitorId, {
             name: payload.visitorName || '访客',
             online: true,
             lastSeen: Date.now(),
             messages: [],
+            sessionStatus: payload.sessionStatus || 'pending',
           });
         }
         renderVisitorList();
@@ -413,6 +431,15 @@
         renderVisitorList();
         if (payload.visitorId === currentVisitorId) {
           updateVisitorStatus();
+        }
+      } else if (data.action === 'session_status') {
+        const { visitorId, sessionStatus } = data.payload;
+        if (visitors.has(visitorId)) {
+          visitors.get(visitorId).sessionStatus = sessionStatus;
+        }
+        renderVisitorList();
+        if (visitorId === currentVisitorId) {
+          sessionStatusSelectEl.value = sessionStatus;
         }
       } else if (data.action === 'typing_start') {
         const visitorId = data.payload.visitorId;
@@ -431,28 +458,61 @@
       }
     };
 
-    function renderVisitorList() {
-      if (visitors.size === 0) {
-        visitorListEl.innerHTML = '<div style="padding: 20px; text-align: center; color: #6b7280; font-size: 13px;">暂无访客</div>';
-        return;
-      }
+    function isUnreplied(visitor) {
+      if (visitor.messages.length === 0) return false;
+      const lastMsg = visitor.messages[visitor.messages.length - 1];
+      return lastMsg.sender === 'visitor';
+    }
 
-      const items = Array.from(visitors.entries())
+    function matchesSearch(visitor, id) {
+      if (!searchQuery) return true;
+      const q = searchQuery.toLowerCase();
+      if (visitor.name.toLowerCase().includes(q)) return true;
+      if (id.toLowerCase().includes(q)) return true;
+      return visitor.messages.some(m =>
+        m.type === 'text' && m.content && m.content.toLowerCase().includes(q)
+      );
+    }
+
+    function matchesFilter(visitor) {
+      switch (currentFilter) {
+        case 'online': return visitor.online;
+        case 'offline': return !visitor.online;
+        case 'unreplied': return isUnreplied(visitor);
+        case 'pending': return visitor.sessionStatus === 'pending';
+        case 'in_progress': return visitor.sessionStatus === 'in_progress';
+        case 'resolved': return visitor.sessionStatus === 'resolved';
+        default: return true;
+      }
+    }
+
+    function renderVisitorList() {
+      const filtered = Array.from(visitors.entries())
+        .filter(([id, v]) => matchesFilter(v) && matchesSearch(v, id))
         .sort((a, b) => {
-          if (a[1].online !== b[1].online) {
-            return a[1].online ? -1 : 1;
+          if (currentFilter === 'unreplied') {
+            const aUnreplied = isUnreplied(a[1]);
+            const bUnreplied = isUnreplied(b[1]);
+            if (aUnreplied !== bUnreplied) return aUnreplied ? -1 : 1;
           }
+          if (a[1].online !== b[1].online) return a[1].online ? -1 : 1;
           const lastA = a[1].messages[a[1].messages.length - 1]?.timestamp || a[1].lastSeen || 0;
           const lastB = b[1].messages[b[1].messages.length - 1]?.timestamp || b[1].lastSeen || 0;
           return lastB - lastA;
         });
 
-      visitorListEl.innerHTML = items.map(([id, v]) => {
+      if (filtered.length === 0) {
+        visitorListEl.innerHTML = '<div class="no-results">' + (visitors.size === 0 ? '暂无访客' : '无匹配结果') + '</div>';
+        return;
+      }
+
+      visitorListEl.innerHTML = filtered.map(([id, v]) => {
         const lastMsg = v.messages.length > 0 ? v.messages[v.messages.length - 1] : null;
         const lastMsgText = lastMsg
           ? (lastMsg.type === 'image' ? '[图片]' : (lastMsg.content || '').substring(0, 20))
           : '暂无消息';
         const initial = (v.name || '访').charAt(0);
+        const statusLabel = { pending: '待处理', in_progress: '跟进中', resolved: '已解决' }[v.sessionStatus] || '待处理';
 
         return `
           <div class="visitor-item ${id === currentVisitorId ? 'active' : ''}" data-id="${id}">
@@ -463,9 +523,11 @@
             <div class="visitor-info">
               <div class="visitor-name">
                 ${escapeHtml(v.name)}
-                <span class="${v.online ? 'online-tag' : 'offline-tag'}">${v.online ? '在线' : '离线'}</span>
+                <span class="tag ${v.online ? 'tag-online' : 'tag-offline'}">${v.online ? '在线' : '离线'}</span>
+                <span class="tag tag-${v.sessionStatus}">${statusLabel}</span>
               </div>
               <div class="visitor-last-msg">${escapeHtml(lastMsgText)}</div>
+              <div class="visitor-id-preview">${escapeHtml(id)}</div>
             </div>
           </div>
         `;
@@ -484,6 +546,7 @@
       if (visitor) {
         chatTitleEl.textContent = `对话：${visitor.name}`;
         visitorInfoEl.textContent = `${visitor.name} (ID: ${id})`;
+        sessionStatusSelectEl.value = visitor.sessionStatus || 'pending';
         visitorPreviewEl.style.display = 'flex';
         messageInputEl.disabled = false;
         sendBtnEl.disabled = false;
@@ -592,6 +655,17 @@
       }
     });
 
+    sessionStatusSelectEl.addEventListener('change', () => {
+      if (!currentVisitorId) return;
+      const newStatus = sessionStatusSelectEl.value;
+      visitors.get(currentVisitorId).sessionStatus = newStatus;
+      ws.send(JSON.stringify({
+        action: 'session_status_update',
+        payload: { visitorId: currentVisitorId, sessionStatus: newStatus },
+      }));
+      renderVisitorList();
+    });
+
     autoReplyToggleEl.addEventListener('click', () => {
       autoReplyEnabled = !autoReplyEnabled;
       updateAutoReplyBtn();
@@ -604,6 +678,20 @@
       autoReplyToggleEl.className = 'toggle-btn ' + (autoReplyEnabled ? 'on' : 'off');
       autoReplyToggleEl.textContent = '自动回复：' + (autoReplyEnabled ? '开启' : '关闭');
     }
+
+    searchBoxEl.addEventListener('input', (e) => {
+      searchQuery = e.target.value.trim();
+      renderVisitorList();
+    });
+
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentFilter = btn.dataset.filter;
+        renderVisitorList();
+      });
+    });
 
     function escapeHtml(text) {
       const div = document.createElement('div');
