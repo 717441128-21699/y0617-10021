@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chat Widget 集成测试</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+      }
+      .demo-content {
+        text-align: center;
+        padding: 40px;
+        max-width: 600px;
+      }
+      .demo-content h1 {
+        font-size: 36px;
+        font-weight: 700;
+        margin-bottom: 16px;
+        letter-spacing: -0.5px;
+      }
+      .demo-content p {
+        font-size: 16px;
+        opacity: 0.85;
+        line-height: 1.7;
+        margin-bottom: 12px;
+      }
+      .demo-content code {
+        background: rgba(255,255,255,0.15);
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="demo-content">
+      <h1>Chat Widget 集成测试</h1>
+      <p>这是一个模拟的宿主网站页面。点击右下角的聊天气泡按钮即可打开客服 Widget。</p>
+      <p>Widget 通过 <code>&lt;script&gt;</code> 标签引入，使用 Shadow DOM 隔离样式，支持文字和图片消息发送，消息通过 IndexedDB 持久化存储。</p>
+      <p>WebSocket 连接到 <code>ws://localhost:8080</code>，连接状态会在聊天窗口头部实时显示。</p>
+    </div>
+    <script src="/dist/chat-widget.js"></script>
+    <script>
+      ChatWidget.init({
+        wsUrl: 'ws://localhost:8080',
+        themeColor: '#4F46E5',
+        position: 'right',
+        welcomeMessage: '你好！有什么可以帮助你的吗？',
+        agentName: '在线客服'
+      });
+    </script>
+  </body>
+</html>
