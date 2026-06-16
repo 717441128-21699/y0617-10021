@@ -13,6 +13,8 @@ interface WidgetState {
   previewImageSrc: string | null
   previewImageMode: ImagePreviewMode
   wsSendMessage: ((message: ChatMessage) => void) | null
+  wsRetryMessage: ((message: ChatMessage) => void) | null
+  agentTyping: boolean
 
   setConfig: (config: WidgetConfig) => void
   setMessages: (messages: ChatMessage[]) => void
@@ -26,6 +28,8 @@ interface WidgetState {
   setPreviewImage: (src: string | null, mode: ImagePreviewMode) => void
   markAllAsRead: () => void
   setWsSendMessage: (fn: ((message: ChatMessage) => void) | null) => void
+  setWsRetryMessage: (fn: ((message: ChatMessage) => void) | null) => void
+  setAgentTyping: (typing: boolean) => void
 }
 
 export const useWidgetStore = create<WidgetState>((set) => ({
@@ -37,6 +41,8 @@ export const useWidgetStore = create<WidgetState>((set) => ({
   previewImageSrc: null,
   previewImageMode: null,
   wsSendMessage: null,
+  wsRetryMessage: null,
+  agentTyping: false,
 
   setConfig: (config) =>
     set({ config: mergeConfig(config) }),
@@ -79,4 +85,10 @@ export const useWidgetStore = create<WidgetState>((set) => ({
 
   setWsSendMessage: (fn) =>
     set({ wsSendMessage: fn }),
+
+  setWsRetryMessage: (fn) =>
+    set({ wsRetryMessage: fn }),
+
+  setAgentTyping: (typing) =>
+    set({ agentTyping: typing }),
 }))

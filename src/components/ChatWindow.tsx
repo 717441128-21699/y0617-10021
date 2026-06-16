@@ -5,7 +5,6 @@ import { InputBar } from './InputBar'
 import { ImagePreview } from './ImagePreview'
 import { StatusIndicator } from './StatusIndicator'
 import { generateId } from '../utils/config'
-import { updateMessageStatus as idbUpdateMessageStatus } from '../utils/idb'
 import type { ChatMessage } from '../types'
 
 export function ChatWindow() {
@@ -15,8 +14,8 @@ export function ChatWindow() {
   const previewImageMode = useWidgetStore((s) => s.previewImageMode)
   const isOpen = useWidgetStore((s) => s.isOpen)
   const wsSendMessage = useWidgetStore((s) => s.wsSendMessage)
+  const wsRetryMessage = useWidgetStore((s) => s.wsRetryMessage)
   const setPreviewImage = useWidgetStore((s) => s.setPreviewImage)
-  const updateMessageStatus = useWidgetStore((s) => s.updateMessageStatus)
 
   const isRight = config.position === 'right'
 
@@ -30,7 +29,8 @@ export function ChatWindow() {
         sender: 'visitor',
         timestamp: Date.now(),
         read: true,
-      } as ChatMessage
+        status: 'pending',
+      }
       wsSendMessage?.(message)
     },
     [wsSendMessage]
@@ -45,7 +45,8 @@ export function ChatWindow() {
         sender: 'visitor',
         timestamp: Date.now(),
         read: true,
-      } as ChatMessage
+        status: 'pending',
+      }
       wsSendMessage?.(message)
       setPreviewImage(null, null)
     },
@@ -54,11 +55,9 @@ export function ChatWindow() {
 
   const handleRetry = useCallback(
     (message: ChatMessage) => {
-      updateMessageStatus(message.id, 'sending')
-      idbUpdateMessageStatus(message.id, 'sending')
-      wsSendMessage?.(message)
+      wsRetryMessage?.(message)
     },
-    [updateMessageStatus, wsSendMessage]
+    [wsRetryMessage]
   )
 
   const handleImageSelect = useCallback(

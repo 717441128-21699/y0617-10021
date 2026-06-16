@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useWidgetStore } from '../store/widgetStore'
 import { MessageBubble } from './MessageBubble'
+import { TypingIndicator } from './TypingIndicator'
 import type { ChatMessage } from '../types'
 
 interface MessageListProps {
@@ -11,11 +12,12 @@ interface MessageListProps {
 export function MessageList({ onImageClick, onRetry }: MessageListProps) {
   const messages = useWidgetStore((s) => s.messages)
   const config = useWidgetStore((s) => s.config)
+  const agentTyping = useWidgetStore((s) => s.agentTyping)
   const endRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages.length])
+  }, [messages.length, agentTyping])
 
   const hasWelcome = messages.length === 0
 
@@ -36,6 +38,8 @@ export function MessageList({ onImageClick, onRetry }: MessageListProps) {
       {messages.map((msg: ChatMessage) => (
         <MessageBubble key={msg.id} message={msg} onImageClick={onImageClick} onRetry={onRetry} />
       ))}
+
+      <TypingIndicator />
       <div ref={endRef} />
     </div>
   )

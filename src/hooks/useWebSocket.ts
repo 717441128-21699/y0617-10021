@@ -7,10 +7,11 @@ import {
   updateMessageStatus as idbUpdateMessageStatus,
 } from '../utils/idb'
 
-const ACK_TIMEOUT_MS = 8000
+const ACK_TIMEOUT_MS = 10000
 
 interface PendingAck {
   timeoutId: ReturnType<typeof setTimeout>
+  retried: boolean
 }
 
 export function useWebSocket() {
@@ -21,6 +22,8 @@ export function useWebSocket() {
   const isOpenRef = useRef(false)
   const pendingAcksRef = useRef<Map<string, PendingAck>>(new Map())
   const isFlushingRef = useRef(false)
+  const sentMessageIdsRef = useRef<Set<string>>(new Set())
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const wsUrl = useWidgetStore((s) => s.config.wsUrl)
   const config = useWidgetStore((s) => s.config)
@@ -29,6 +32,7 @@ export function useWebSocket() {
   const addMessage = useWidgetStore((s) => s.addMessage)
   const updateMessageStatus = useWidgetStore((s) => s.updateMessageStatus)
   const incrementUnread = useWidgetStore((s) => s.incrementUnread)
+  const setAgentTyping = useWidgetStore((s) => s.setAgentTyping)
 
   useEffect(() => {
     isOpenRef.current = isOpen
@@ -63,11 +67,13 @@ export function useWebSocket() {
       clearTimeout(pending.timeoutId)
       pendingAcksRef.current.delete(messageId)
     }
-    updateMessageStatus(messageId, 'sent')
-    idbUpdateMessageStatus(messageId, 'sent')
+    updateMessageStatus(messageId, 'delivered')
+    idbUpdateMessageStatus(messageId, 'delivered')
+    sentMessageIdsRef.current.add(messageId)
   }, [updateMessageStatus])
 
   const markMessageFailed = useCallback((messageId: string) => {
+    const pending = pendingAcksRef.current.get(messageId)
     pendingAcksRef.current.delete(messageId)
     updateMessageStatus(messageId, 'failed')
     idbUpdateMessageStatus(messageId, 'failed')
@@ -83,18 +89,32 @@ export function useWebSocket() {
         if (!mountedRef.current) break
         if (wsRef.current?.readyState !== WebSocket.OPEN) break
 
-        const success = sendViaWebSocket(msg)
-        if (success) {
-          updateMessageStatus(msg.id, 'sending')
-          idbUpdateMessageStatus(msg.id, 'sending')
+        if (sentMessageIdsRef.current.has(msg.id)) {
+          updateMessageStatus(msg.id, 'delivered')
+          idbUpdateMessageStatus(msg.id, 'delivered')
+          continue
+        }
 
+        if (msg.status === 'pending' || msg.status === 'failed') {
+          const success = sendViaWebSocket(msg)
+          if (success) {
+            updateMessageStatus(msg.id, 'sending')
+            idbUpdateMessageStatus(msg.id, 'sending')
+
+            const timeoutId = setTimeout(() => {
+              markMessageFailed(msg.id)
+            }, ACK_TIMEOUT_MS)
+            pendingAcksRef.current.set(msg.id, { timeoutId, retried: false })
+            sentMessageIdsRef.current.add(msg.id)
+          } else {
+            updateMessageStatus(msg.id, 'failed')
+            idbUpdateMessageStatus(msg.id, 'failed')
+          }
+        } else if (msg.status === 'sending') {
           const timeoutId = setTimeout(() => {
             markMessageFailed(msg.id)
           }, ACK_TIMEOUT_MS)
-          pendingAcksRef.current.set(msg.id, { timeoutId })
-        } else {
-          updateMessageStatus(msg.id, 'failed')
-          idbUpdateMessageStatus(msg.id, 'failed')
+          pendingAcksRef.current.set(msg.id, { timeoutId, retried: false })
         }
       }
     } finally {
@@ -110,31 +130,84 @@ export function useWebSocket() {
         visitorName: config.visitorName,
       }
 
+      const ws = wsRef.current
+      const isOnline = ws && ws.readyState === WebSocket.OPEN
+
+      if (isOnline) {
+        enriched.status = 'sending'
+      } else {
+        enriched.status = 'pending'
+      }
+
       addMessage(enriched)
       idbAddMessage(enriched)
 
-      const ws = wsRef.current
-      if (ws && ws.readyState === WebSocket.OPEN) {
+      if (isOnline) {
         const success = sendViaWebSocket(enriched)
         if (success) {
           updateMessageStatus(enriched.id, 'sending')
           idbUpdateMessageStatus(enriched.id, 'sending')
+          sentMessageIdsRef.current.add(enriched.id)
 
           const timeoutId = setTimeout(() => {
             markMessageFailed(enriched.id)
           }, ACK_TIMEOUT_MS)
-          pendingAcksRef.current.set(enriched.id, { timeoutId })
+          pendingAcksRef.current.set(enriched.id, { timeoutId, retried: false })
         } else {
-          updateMessageStatus(enriched.id, 'failed')
-          idbUpdateMessageStatus(enriched.id, 'failed')
+          updateMessageStatus(enriched.id, 'pending')
+          idbUpdateMessageStatus(enriched.id, 'pending')
         }
-      } else {
-        updateMessageStatus(enriched.id, 'failed')
-        idbUpdateMessageStatus(enriched.id, 'failed')
       }
     },
     [config.visitorId, config.visitorName, addMessage, sendViaWebSocket, updateMessageStatus, markMessageFailed]
   )
+
+  const retryMessage = useCallback(
+    (message: ChatMessage) => {
+      if (sentMessageIdsRef.current.has(message.id)) {
+        updateMessageStatus(message.id, 'delivered')
+        idbUpdateMessageStatus(message.id, 'delivered')
+        return
+      }
+
+      updateMessageStatus(message.id, 'sending')
+      idbUpdateMessageStatus(message.id, 'sending')
+
+      const ws = wsRef.current
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        const success = sendViaWebSocket(message)
+        if (success) {
+          sentMessageIdsRef.current.add(message.id)
+          const timeoutId = setTimeout(() => {
+            markMessageFailed(message.id)
+          }, ACK_TIMEOUT_MS)
+          pendingAcksRef.current.set(message.id, { timeoutId, retried: true })
+        } else {
+          updateMessageStatus(message.id, 'failed')
+          idbUpdateMessageStatus(message.id, 'failed')
+        }
+      } else {
+        updateMessageStatus(message.id, 'pending')
+        idbUpdateMessageStatus(message.id, 'pending')
+      }
+    },
+    [sendViaWebSocket, updateMessageStatus, markMessageFailed]
+  )
+
+  const handleTypingEvent = useCallback((isTyping: boolean) => {
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current)
+      typingTimeoutRef.current = null
+    }
+
+    setAgentTyping(isTyping)
+
+    if (isTyping) {
+      typingTimeoutRef.current = setTimeout(() => {
+        setAgentTyping(false)
+      }, 5000)
+    }
+  }, [setAgentTyping])
 
   const connectRef = useRef<() => void>(() => {})
 
@@ -173,6 +246,19 @@ export function useWebSocket() {
           if (!mountedRef.current) return
           reconnectAttemptsRef.current = 0
           setConnectionStatus('connected')
+
+          const initMsg: WSMessage = {
+            action: 'visitor_online',
+            payload: {
+              visitorId: config.visitorId,
+              visitorName: config.visitorName,
+              online: true,
+            },
+          }
+          try {
+            ws.send(JSON.stringify(initMsg))
+          } catch {}
+
           flushPendingMessages()
         }
 
@@ -182,11 +268,12 @@ export function useWebSocket() {
 
           pendingAcksRef.current.forEach((p, id) => {
             clearTimeout(p.timeoutId)
-            updateMessageStatus(id, 'failed')
-            idbUpdateMessageStatus(id, 'failed')
+            updateMessageStatus(id, 'pending')
+            idbUpdateMessageStatus(id, 'pending')
           })
           pendingAcksRef.current.clear()
 
+          setAgentTyping(false)
           scheduleReconnect()
         }
 
@@ -201,7 +288,17 @@ export function useWebSocket() {
             const data: WSMessage = JSON.parse(event.data)
 
             if (data.action === 'message_ack' && 'messageId' in data.payload) {
-              handleMessageAck(data.payload.messageId)
+              handleMessageAck((data.payload as { messageId: string }).messageId)
+              return
+            }
+
+            if (data.action === 'typing_start') {
+              handleTypingEvent(true)
+              return
+            }
+
+            if (data.action === 'typing_stop') {
+              handleTypingEvent(false)
               return
             }
 
@@ -210,13 +307,24 @@ export function useWebSocket() {
               const msg: ChatMessage = {
                 ...payload,
                 read: isOpenRef.current,
-                status: 'sent',
+                status: 'delivered',
               }
               addMessage(msg)
               idbAddMessage(msg)
+
+              setAgentTyping(false)
+
               if (!isOpenRef.current && msg.sender === 'agent') {
                 incrementUnread()
               }
+            }
+
+            if (data.action === 'session_history' && Array.isArray(data.payload)) {
+              const history = data.payload as ChatMessage[]
+              history.forEach((h) => {
+                addMessage({ ...h, status: h.status || 'delivered' })
+                idbAddMessage({ ...h, status: h.status || 'delivered' })
+              })
             }
           } catch {
             // ignore malformed messages
@@ -239,6 +347,10 @@ export function useWebSocket() {
         clearTimeout(reconnectTimerRef.current)
         reconnectTimerRef.current = null
       }
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
+        typingTimeoutRef.current = null
+      }
       pendingAcksRef.current.forEach((p) => clearTimeout(p.timeoutId))
       pendingAcksRef.current.clear()
       if (wsRef.current) {
@@ -247,7 +359,7 @@ export function useWebSocket() {
         wsRef.current = null
       }
     }
-  }, [wsUrl, setConnectionStatus, addMessage, updateMessageStatus, incrementUnread, handleMessageAck, flushPendingMessages])
+  }, [wsUrl, setConnectionStatus, addMessage, updateMessageStatus, incrementUnread, handleMessageAck, handleTypingEvent, flushPendingMessages, config.visitorId, config.visitorName])
 
   const disconnect = useCallback(() => {
     if (reconnectTimerRef.current) {
@@ -264,5 +376,5 @@ export function useWebSocket() {
     setConnectionStatus('disconnected')
   }, [setConnectionStatus])
 
-  return { sendMessage, disconnect }
+  return { sendMessage, retryMessage, disconnect }
 }

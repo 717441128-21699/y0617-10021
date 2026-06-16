@@ -56,9 +56,10 @@
       <p>WebSocket 连接到 <code>ws://localhost:8080</code>，连接状态会在聊天窗口头部实时显示。</p>
       <ul>
         <li><strong>会话信息</strong>：visitorId 自动生成并持久化，visitorName 可自定义</li>
-        <li><strong>消息补发</strong>：断网时消息显示「待发送」，恢复后自动补发</li>
+        <li><strong>正在输入</strong>：客服输入时访客端显示输入提示，发送消息后自动消失</li>
+        <li><strong>会话持久化</strong>：客服控制台按在线状态和消息时间排序，支持历史对话继续回复</li>
         <li><strong>历史记录</strong>：刷新页面后聊天记录和未读状态正确保留</li>
-        <li><strong>消息状态</strong>：发送中 ⟳ / 已发送 ✓ / 失败 ⚠ (点击重试)</li>
+        <li><strong>消息状态</strong>：待发送 ⏳ / 发送中 ⟳ / 已送达 ✓ / 失败 ⚠ (点击重试)</li>
       </ul>
     </div>
     <script src="/dist/chat-widget.js"></script>

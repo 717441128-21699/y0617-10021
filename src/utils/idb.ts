@@ -2,7 +2,7 @@ import { openDB, type IDBPDatabase } from 'idb'
 import type { ChatMessage, MessageStatus } from '../types'
 
 const DB_NAME = 'chat_widget_db'
-const DB_VERSION = 2
+const DB_VERSION = 3
 
 let dbPromise: Promise<IDBPDatabase> | null = null
 
@@ -27,6 +27,12 @@ function getDB(): Promise<IDBPDatabase> {
             store.createIndex('status', 'status')
           }
         }
+        if (oldVersion < 3 && db.objectStoreNames.contains('messages')) {
+          const store = transaction.objectStore('messages')
+          if (!store.indexNames.contains('status')) {
+            store.createIndex('status', 'status')
+          }
+        }
       },
     })
   }
@@ -36,17 +42,24 @@ function getDB(): Promise<IDBPDatabase> {
 export async function getAllMessages(): Promise<ChatMessage[]> {
   const db = await getDB()
   const messages = await db.getAllFromIndex('messages', 'timestamp')
-  return messages.map((m) => ({
-    ...m,
-    status: m.status || (m.sender === 'visitor' ? 'sent' : 'sent'),
-  }))
+  return messages.map((m) => {
+    const status = m.status || 'delivered'
+    return { ...m, status: migrateStatus(status) } as ChatMessage
+  })
+}
+
+function migrateStatus(status: string): MessageStatus {
+  if (status === 'sent') return 'delivered'
+  if (['pending', 'sending', 'delivered', 'failed'].includes(status)) return status as MessageStatus
+  return 'delivered'
 }
 
 export async function getPendingMessages(): Promise<ChatMessage[]> {
   const db = await getDB()
-  const messages = await db.getAllFromIndex('messages', 'status', 'sending')
+  const pending = await db.getAllFromIndex('messages', 'status', 'pending')
+  const sending = await db.getAllFromIndex('messages', 'status', 'sending')
   const failed = await db.getAllFromIndex('messages', 'status', 'failed')
-  return [...messages, ...failed].sort((a, b) => a.timestamp - b.timestamp)
+  return [...pending, ...sending, ...failed].sort((a, b) => a.timestamp - b.timestamp)
 }
 
 export async function addMessage(message: ChatMessage): Promise<void> {
@@ -106,4 +119,13 @@ export async function getUnreadCount(): Promise<number> {
   }
   await tx.done
   return count
+}
+
+export async function isChatOpen(): Promise<boolean> {
+  const val = await getWidgetState('isOpen')
+  return val === 'true'
+}
+
+export async function setChatOpenState(open: boolean): Promise<void> {
+  await setWidgetState('isOpen', open ? 'true' : 'false')
 }

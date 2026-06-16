@@ -8,20 +8,21 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const PORT = 8080
 
-interface Visitor {
-  ws: WebSocket
+interface VisitorSession {
   visitorId: string
   visitorName: string
-  pendingMessages: any[]
+  ws: WebSocket | null
+  online: boolean
+  lastSeen: number
+  messages: any[]
 }
 
 interface Agent {
   ws: WebSocket
 }
 
-const visitors = new Map<string, Visitor>()
+const sessions = new Map<string, VisitorSession>()
 let agents: Agent[] = []
-const messageHistory = new Map<string, any[]>()
 
 const autoReplies = [
   '感谢您的咨询！请问有什么可以帮助您的？',
@@ -64,27 +65,31 @@ wss.on('connection', (ws, request) => {
 })
 
 function handleAgentConnection(ws: WebSocket) {
-  console.log('代理客服已连接')
+  console.log('客服已连接')
   agents.push({ ws })
+
+  const visitorList = Array.from(sessions.values()).map((s) => ({
+    visitorId: s.visitorId,
+    visitorName: s.visitorName,
+    online: s.online,
+    lastSeen: s.lastSeen,
+    messages: s.messages,
+    lastMessage: s.messages.length > 0 ? s.messages[s.messages.length - 1] : null,
+  }))
 
   ws.send(JSON.stringify({
     action: 'init',
-    payload: {
-      visitors: Array.from(visitors.values()).map(v => ({
-        visitorId: v.visitorId,
-        visitorName: v.visitorName,
-        messages: messageHistory.get(v.visitorId) || [],
-      })),
-    },
+    payload: { visitors: visitorList },
   }))
 
   ws.on('message', (data) => {
     try {
       const msg = JSON.parse(data.toString())
+
       if (msg.action === 'send_message' && msg.payload) {
         const { visitorId, content, type } = msg.payload
-        const visitor = visitors.get(visitorId)
-        if (visitor && visitor.ws.readyState === WebSocket.OPEN) {
+        const session = sessions.get(visitorId)
+        if (session) {
           const chatMsg = {
             id: generateId(),
             type: type || 'text',
@@ -92,19 +97,44 @@ function handleAgentConnection(ws: WebSocket) {
             sender: 'agent' as const,
             timestamp: Date.now(),
             read: false,
-            status: 'sent' as const,
+            status: 'delivered' as const,
           }
-          visitor.ws.send(JSON.stringify({
-            action: 'message',
-            payload: chatMsg,
-          }))
-          addToHistory(visitorId, chatMsg)
+
+          session.messages.push({ ...chatMsg, visitorId })
+          session.lastSeen = Date.now()
+
+          if (session.ws && session.ws.readyState === WebSocket.OPEN) {
+            session.ws.send(JSON.stringify({
+              action: 'message',
+              payload: chatMsg,
+            }))
+          }
+
           broadcastToAgents({
             action: 'message',
-            payload: { ...chatMsg, visitorId, visitorName: visitor.visitorName },
-          })
+            payload: { ...chatMsg, visitorId, visitorName: session.visitorName },
+          }, ws)
+        }
+      } else if (msg.action === 'typing_start' && msg.payload) {
+        const { visitorId } = msg.payload
+        const session = sessions.get(visitorId)
+        if (session && session.ws && session.ws.readyState === WebSocket.OPEN) {
+          session.ws.send(JSON.stringify({
+            action: 'typing_start',
+            payload: { sender: 'agent' },
+          }))
+        }
+      } else if (msg.action === 'typing_stop' && msg.payload) {
+        const { visitorId } = msg.payload
+        const session = sessions.get(visitorId)
+        if (session && session.ws && session.ws.readyState === WebSocket.OPEN) {
+          session.ws.send(JSON.stringify({
+            action: 'typing_stop',
+            payload: { sender: 'agent' },
+          }))
         }
       } else if (msg.action === 'auto_reply_on' || msg.action === 'auto_reply_off') {
+        autoReplyEnabled = msg.action === 'auto_reply_on'
         broadcastToAgents(msg)
       }
     } catch (e) {
@@ -114,7 +144,7 @@ function handleAgentConnection(ws: WebSocket) {
 
   ws.on('close', () => {
     agents = agents.filter(a => a.ws !== ws)
-    console.log('代理客服已断开')
+    console.log('客服已断开')
   })
 }
 
@@ -125,22 +155,79 @@ function handleVisitorConnection(ws: WebSocket) {
   ws.on('message', (data) => {
     try {
       const msg = JSON.parse(data.toString())
+
+      if (msg.action === 'visitor_online' && msg.payload) {
+        visitorId = msg.payload.visitorId || ''
+        visitorName = msg.payload.visitorName || '访客'
+
+        if (!visitorId) {
+          visitorId = 'v_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8)
+        }
+
+        let session = sessions.get(visitorId)
+        if (session) {
+          session.ws = ws
+          session.online = true
+          session.lastSeen = Date.now()
+
+          if (session.messages.length > 0) {
+            ws.send(JSON.stringify({
+              action: 'session_history',
+              payload: session.messages,
+            }))
+          }
+        } else {
+          session = {
+            visitorId,
+            visitorName,
+            ws,
+            online: true,
+            lastSeen: Date.now(),
+            messages: [],
+          }
+          sessions.set(visitorId, session)
+        }
+
+        broadcastToAgents({
+          action: 'visitor_online',
+          payload: {
+            visitorId,
+            visitorName,
+            online: true,
+            lastMessage: session.messages.length > 0 ? session.messages[session.messages.length - 1] : null,
+          },
+        })
+
+        console.log(`访客[${visitorName}(${visitorId})]已上线`)
+        return
+      }
+
       if (msg.action === 'send_message' && msg.payload) {
         const payload = msg.payload
+
         if (!visitorId && payload.visitorId) {
           visitorId = payload.visitorId
           visitorName = payload.visitorName || '访客'
-          visitors.set(visitorId, {
-            ws,
-            visitorId,
-            visitorName,
-            pendingMessages: [],
-          })
+
+          let session = sessions.get(visitorId)
+          if (session) {
+            session.ws = ws
+            session.online = true
+          } else {
+            sessions.set(visitorId, {
+              visitorId,
+              visitorName,
+              ws,
+              online: true,
+              lastSeen: Date.now(),
+              messages: [],
+            })
+          }
         }
 
         const chatMsg = {
           ...payload,
-          status: 'sent' as const,
+          status: 'delivered' as const,
           read: true,
         }
 
@@ -149,9 +236,13 @@ function handleVisitorConnection(ws: WebSocket) {
           payload: { messageId: payload.id },
         }))
 
-        console.log(`收到访客[${visitorName}(${visitorId})]消息:`, payload.type, payload.content.substring(0, 50))
+        console.log(`收到访客[${visitorName}(${visitorId})]消息:`, payload.type, (payload.content || '').substring(0, 50))
 
-        addToHistory(visitorId, chatMsg)
+        const session = sessions.get(visitorId)
+        if (session) {
+          session.messages.push({ ...chatMsg, visitorId })
+          session.lastSeen = Date.now()
+        }
 
         broadcastToAgents({
           action: 'message',
@@ -159,6 +250,11 @@ function handleVisitorConnection(ws: WebSocket) {
         })
 
         if (autoReplyEnabled && chatMsg.type === 'text') {
+          broadcastToAgents({
+            action: 'typing_start',
+            payload: { visitorId },
+          })
+
           setTimeout(() => {
             if (ws.readyState === WebSocket.OPEN) {
               const reply = autoReplies[Math.floor(Math.random() * autoReplies.length)]
@@ -169,20 +265,32 @@ function handleVisitorConnection(ws: WebSocket) {
                 sender: 'agent' as const,
                 timestamp: Date.now(),
                 read: false,
-                status: 'sent' as const,
+                status: 'delivered' as const,
               }
+
+              broadcastToAgents({
+                action: 'typing_stop',
+                payload: { visitorId },
+              })
+
               ws.send(JSON.stringify({
                 action: 'message',
                 payload: agentMsg,
               }))
-              addToHistory(visitorId, agentMsg)
+
+              if (session) {
+                session.messages.push({ ...agentMsg, visitorId })
+                session.lastSeen = Date.now()
+              }
+
               broadcastToAgents({
                 action: 'message',
                 payload: { ...agentMsg, visitorId, visitorName },
               })
+
               console.log(`自动回复访客[${visitorName}]:`, reply.substring(0, 50))
             }
-          }, 800 + Math.random() * 1500)
+          }, 1200 + Math.random() * 2000)
         }
       }
     } catch (e) {
@@ -192,24 +300,27 @@ function handleVisitorConnection(ws: WebSocket) {
 
   ws.on('close', () => {
     if (visitorId) {
-      console.log(`访客[${visitorName}]已断开`)
+      const session = sessions.get(visitorId)
+      if (session) {
+        session.ws = null
+        session.online = false
+        session.lastSeen = Date.now()
+      }
+      broadcastToAgents({
+        action: 'visitor_offline',
+        payload: { visitorId, visitorName },
+      })
+      console.log(`访客[${visitorName}]已离线`)
     }
   })
 }
 
-function broadcastToAgents(msg: any) {
+function broadcastToAgents(msg: any, excludeWs?: WebSocket) {
   agents.forEach(a => {
-    if (a.ws.readyState === WebSocket.OPEN) {
+    if (a.ws !== excludeWs && a.ws.readyState === WebSocket.OPEN) {
       a.ws.send(JSON.stringify(msg))
     }
   })
-}
-
-function addToHistory(visitorId: string, msg: any) {
-  if (!messageHistory.has(visitorId)) {
-    messageHistory.set(visitorId, [])
-  }
-  messageHistory.get(visitorId)!.push({ ...msg, visitorId })
 }
 
 function generateId(): string {
@@ -220,7 +331,8 @@ let autoReplyEnabled = true
 
 setInterval(() => {
   console.log(`=== 服务器状态 ===`)
-  console.log(`访客连接数: ${visitors.size}`)
+  console.log(`会话总数: ${sessions.size}`)
+  console.log(`在线访客: ${Array.from(sessions.values()).filter(s => s.online).length}`)
   console.log(`客服连接数: ${agents.length}`)
   console.log(`自动回复: ${autoReplyEnabled ? '开启' : '关闭'}`)
   console.log(`==================`)
@@ -238,4 +350,5 @@ server.listen(PORT, () => {
   console.log(`2. 再打开 demo.html 或 dev 页面作为访客端`)
   console.log(`3. 在访客端发消息，客服端可以看到并回复`)
   console.log(`4. 断开服务器模拟断网，再重连查看自动补发`)
+  console.log(`5. 客服输入时会发送 typing 事件，访客端显示输入提示`)
 })

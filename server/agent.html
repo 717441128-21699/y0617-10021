@@ -13,7 +13,7 @@
       display: flex;
     }
     .sidebar {
-      width: 260px;
+      width: 280px;
       background: #1f2937;
       color: white;
       padding: 20px 0;
@@ -35,6 +35,9 @@
       cursor: pointer;
       border-left: 3px solid transparent;
       transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 10px;
     }
     .visitor-item:hover {
       background: #374151;
@@ -43,15 +46,71 @@
       background: #374151;
       border-left-color: #4f46e5;
     }
+    .visitor-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #4f46e5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 600;
+      flex-shrink: 0;
+      position: relative;
+    }
+    .visitor-avatar .online-dot {
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #22c55e;
+      border: 2px solid #1f2937;
+    }
+    .visitor-avatar .offline-dot {
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #6b7280;
+      border: 2px solid #1f2937;
+    }
+    .visitor-info {
+      flex: 1;
+      min-width: 0;
+    }
     .visitor-name {
       font-size: 14px;
       font-weight: 500;
       margin-bottom: 2px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
-    .visitor-id {
-      font-size: 11px;
-      opacity: 0.5;
-      font-family: monospace;
+    .visitor-name .online-tag {
+      font-size: 10px;
+      background: #22c55e;
+      color: white;
+      padding: 1px 5px;
+      border-radius: 3px;
+    }
+    .visitor-name .offline-tag {
+      font-size: 10px;
+      background: #6b7280;
+      color: white;
+      padding: 1px 5px;
+      border-radius: 3px;
+    }
+    .visitor-last-msg {
+      font-size: 12px;
+      opacity: 0.6;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .controls {
       padding: 16px 20px;
@@ -210,9 +269,18 @@
       border-bottom: 1px solid #c7d2fe;
       color: #4338ca;
       font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
     }
     .visitor-preview p {
       padding: 8px 0;
+    }
+    .typing-indicator {
+      padding: 4px 20px;
+      font-size: 12px;
+      color: #6b7280;
+      font-style: italic;
     }
   </style>
 </head>
@@ -241,11 +309,13 @@
     </div>
     <div class="visitor-preview" id="visitorPreview" style="display: none;">
       <p>访客信息：<span id="visitorInfo"></span></p>
+      <p>状态：<span id="visitorStatus"></span></p>
     </div>
     <div class="chat-area">
       <div class="message-list" id="messageList">
         <div class="empty-state">选择左侧访客查看对话</div>
       </div>
+      <div class="typing-indicator" id="typingIndicator" style="display: none;"></div>
       <div class="input-area">
         <textarea id="messageInput" placeholder="输入消息，按 Enter 发送，Shift+Enter 换行" disabled></textarea>
         <button id="sendBtn" disabled>发送</button>
@@ -258,6 +328,7 @@
     const visitors = new Map();
     let currentVisitorId = null;
     let autoReplyEnabled = true;
+    let typingTimeout = null;
 
     const visitorListEl = document.getElementById('visitorList');
     const messageListEl = document.getElementById('messageList');
@@ -269,6 +340,8 @@
     const autoReplyToggleEl = document.getElementById('autoReplyToggle');
     const visitorPreviewEl = document.getElementById('visitorPreview');
     const visitorInfoEl = document.getElementById('visitorInfo');
+    const visitorStatusEl = document.getElementById('visitorStatus');
+    const typingIndicatorEl = document.getElementById('typingIndicator');
 
     ws.onopen = () => {
       statusDotEl.className = 'status-dot';
@@ -288,6 +361,8 @@
         visitorList.forEach(v => {
           visitors.set(v.visitorId, {
             name: v.visitorName,
+            online: v.online || false,
+            lastSeen: v.lastSeen || 0,
             messages: v.messages || [],
           });
         });
@@ -299,16 +374,54 @@
         if (!visitors.has(visitorId)) {
           visitors.set(visitorId, {
             name: msg.visitorName || '访客',
+            online: true,
+            lastSeen: Date.now(),
             messages: [],
           });
         }
 
         visitors.get(visitorId).messages.push(msg);
+        visitors.get(visitorId).lastSeen = Date.now();
         renderVisitorList();
 
         if (visitorId === currentVisitorId) {
           renderMessages();
         }
+      } else if (data.action === 'visitor_online') {
+        const payload = data.payload;
+        if (visitors.has(payload.visitorId)) {
+          visitors.get(payload.visitorId).online = true;
+          visitors.get(payload.visitorId).lastSeen = Date.now();
+        } else {
+          visitors.set(payload.visitorId, {
+            name: payload.visitorName || '访客',
+            online: true,
+            lastSeen: Date.now(),
+            messages: [],
+          });
+        }
+        renderVisitorList();
+        if (payload.visitorId === currentVisitorId) {
+          updateVisitorStatus();
+        }
+      } else if (data.action === 'visitor_offline') {
+        const payload = data.payload;
+        if (visitors.has(payload.visitorId)) {
+          visitors.get(payload.visitorId).online = false;
+          visitors.get(payload.visitorId).lastSeen = Date.now();
+        }
+        renderVisitorList();
+        if (payload.visitorId === currentVisitorId) {
+          updateVisitorStatus();
+        }
+      } else if (data.action === 'typing_start') {
+        const visitorId = data.payload.visitorId;
+        if (visitorId === currentVisitorId) {
+          typingIndicatorEl.textContent = '访客正在输入...';
+          typingIndicatorEl.style.display = 'block';
+        }
+      } else if (data.action === 'typing_stop') {
+        typingIndicatorEl.style.display = 'none';
       } else if (data.action === 'auto_reply_on') {
         autoReplyEnabled = true;
         updateAutoReplyBtn();
@@ -326,17 +439,37 @@
 
       const items = Array.from(visitors.entries())
         .sort((a, b) => {
-          const lastA = a[1].messages[a[1].messages.length - 1]?.timestamp || 0;
-          const lastB = b[1].messages[b[1].messages.length - 1]?.timestamp || 0;
+          if (a[1].online !== b[1].online) {
+            return a[1].online ? -1 : 1;
+          }
+          const lastA = a[1].messages[a[1].messages.length - 1]?.timestamp || a[1].lastSeen || 0;
+          const lastB = b[1].messages[b[1].messages.length - 1]?.timestamp || b[1].lastSeen || 0;
           return lastB - lastA;
         });
 
-      visitorListEl.innerHTML = items.map(([id, v]) => `
-        <div class="visitor-item ${id === currentVisitorId ? 'active' : ''}" data-id="${id}">
-          <div class="visitor-name">${escapeHtml(v.name)} (${v.messages.length})</div>
-          <div class="visitor-id">${id}</div>
-        </div>
-      `).join('');
+      visitorListEl.innerHTML = items.map(([id, v]) => {
+        const lastMsg = v.messages.length > 0 ? v.messages[v.messages.length - 1] : null;
+        const lastMsgText = lastMsg
+          ? (lastMsg.type === 'image' ? '[图片]' : (lastMsg.content || '').substring(0, 20))
+          : '暂无消息';
+        const initial = (v.name || '访').charAt(0);
+
+        return `
+          <div class="visitor-item ${id === currentVisitorId ? 'active' : ''}" data-id="${id}">
+            <div class="visitor-avatar">
+              ${escapeHtml(initial)}
+              <span class="${v.online ? 'online-dot' : 'offline-dot'}"></span>
+            </div>
+            <div class="visitor-info">
+              <div class="visitor-name">
+                ${escapeHtml(v.name)}
+                <span class="${v.online ? 'online-tag' : 'offline-tag'}">${v.online ? '在线' : '离线'}</span>
+              </div>
+              <div class="visitor-last-msg">${escapeHtml(lastMsgText)}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
 
       visitorListEl.querySelectorAll('.visitor-item').forEach(item => {
         item.addEventListener('click', () => {
@@ -351,11 +484,21 @@
       if (visitor) {
         chatTitleEl.textContent = `对话：${visitor.name}`;
         visitorInfoEl.textContent = `${visitor.name} (ID: ${id})`;
-        visitorPreviewEl.style.display = 'block';
+        visitorPreviewEl.style.display = 'flex';
         messageInputEl.disabled = false;
         sendBtnEl.disabled = false;
+        updateVisitorStatus();
         renderVisitorList();
         renderMessages();
+      }
+    }
+
+    function updateVisitorStatus() {
+      if (!currentVisitorId) return;
+      const visitor = visitors.get(currentVisitorId);
+      if (visitor) {
+        const lastSeen = visitor.lastSeen ? new Date(visitor.lastSeen).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '';
+        visitorStatusEl.textContent = visitor.online ? '🟢 在线' : `⚫ 离线 (最后活跃: ${lastSeen})`;
       }
     }
 
@@ -375,7 +518,6 @@
         const isVisitor = msg.sender === 'visitor';
         const time = new Date(msg.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
         const senderLabel = isVisitor ? visitor.name : '客服';
-        const typeLabel = msg.type === 'image' ? '[图片] ' : '';
 
         if (msg.type === 'image') {
           return `
@@ -404,6 +546,11 @@
       if (!text || !currentVisitorId) return;
 
       ws.send(JSON.stringify({
+        action: 'typing_stop',
+        payload: { visitorId: currentVisitorId },
+      }));
+
+      ws.send(JSON.stringify({
         action: 'send_message',
         payload: {
           visitorId: currentVisitorId,
@@ -428,6 +575,21 @@
     messageInputEl.addEventListener('input', (e) => {
       e.target.style.height = 'auto';
       e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+
+      if (currentVisitorId) {
+        ws.send(JSON.stringify({
+          action: 'typing_start',
+          payload: { visitorId: currentVisitorId },
+        }));
+
+        if (typingTimeout) clearTimeout(typingTimeout);
+        typingTimeout = setTimeout(() => {
+          ws.send(JSON.stringify({
+            action: 'typing_stop',
+            payload: { visitorId: currentVisitorId },
+          }));
+        }, 3000);
+      }
     });
 
     autoReplyToggleEl.addEventListener('click', () => {

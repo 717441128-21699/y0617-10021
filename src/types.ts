@@ -8,7 +8,7 @@ export interface WidgetConfig {
   visitorName?: string
 }
 
-export type MessageStatus = 'sending' | 'sent' | 'failed'
+export type MessageStatus = 'pending' | 'sending' | 'delivered' | 'failed'
 
 export interface ChatMessage {
   id: string
@@ -24,7 +24,12 @@ export interface ChatMessage {
 
 export type ConnectionStatus = 'connected' | 'disconnected' | 'reconnecting'
 
+export interface TypingPayload {
+  sender: 'agent'
+  visitorId?: string
+}
+
 export interface WSMessage {
-  action: 'message' | 'agent_joined' | 'agent_left' | 'send_message' | 'message_ack'
-  payload: ChatMessage | { messageId: string }
+  action: 'message' | 'agent_joined' | 'agent_left' | 'send_message' | 'message_ack' | 'typing_start' | 'typing_stop' | 'visitor_online' | 'visitor_offline' | 'session_history'
+  payload: ChatMessage | { messageId: string } | TypingPayload | { visitorId: string; visitorName: string; online: boolean; lastMessage?: ChatMessage } | ChatMessage[]
 }
