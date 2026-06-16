@@ -5,9 +5,10 @@ import type { ChatMessage } from '../types'
 
 interface MessageListProps {
   onImageClick: (src: string) => void
+  onRetry: (message: ChatMessage) => void
 }
 
-export function MessageList({ onImageClick }: MessageListProps) {
+export function MessageList({ onImageClick, onRetry }: MessageListProps) {
   const messages = useWidgetStore((s) => s.messages)
   const config = useWidgetStore((s) => s.config)
   const endRef = useRef<HTMLDivElement>(null)
@@ -33,7 +34,7 @@ export function MessageList({ onImageClick }: MessageListProps) {
       {hasWelcome && <WelcomeMessage text={config.welcomeMessage} agentName={config.agentName} />}
 
       {messages.map((msg: ChatMessage) => (
-        <MessageBubble key={msg.id} message={msg} onImageClick={onImageClick} />
+        <MessageBubble key={msg.id} message={msg} onImageClick={onImageClick} onRetry={onRetry} />
       ))}
       <div ref={endRef} />
     </div>

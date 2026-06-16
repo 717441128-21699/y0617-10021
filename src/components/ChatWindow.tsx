@@ -5,7 +5,7 @@ import { InputBar } from './InputBar'
 import { ImagePreview } from './ImagePreview'
 import { StatusIndicator } from './StatusIndicator'
 import { generateId } from '../utils/config'
-import { addMessage as idbAddMessage } from '../utils/idb'
+import { updateMessageStatus as idbUpdateMessageStatus } from '../utils/idb'
 import type { ChatMessage } from '../types'
 
 export function ChatWindow() {
@@ -14,9 +14,9 @@ export function ChatWindow() {
   const previewImageSrc = useWidgetStore((s) => s.previewImageSrc)
   const previewImageMode = useWidgetStore((s) => s.previewImageMode)
   const isOpen = useWidgetStore((s) => s.isOpen)
-  const addMessage = useWidgetStore((s) => s.addMessage)
   const wsSendMessage = useWidgetStore((s) => s.wsSendMessage)
   const setPreviewImage = useWidgetStore((s) => s.setPreviewImage)
+  const updateMessageStatus = useWidgetStore((s) => s.updateMessageStatus)
 
   const isRight = config.position === 'right'
 
@@ -30,12 +30,10 @@ export function ChatWindow() {
         sender: 'visitor',
         timestamp: Date.now(),
         read: true,
-      }
-      addMessage(message)
-      idbAddMessage(message)
+      } as ChatMessage
       wsSendMessage?.(message)
     },
-    [addMessage, wsSendMessage]
+    [wsSendMessage]
   )
 
   const sendImageMessage = useCallback(
@@ -47,13 +45,20 @@ export function ChatWindow() {
         sender: 'visitor',
         timestamp: Date.now(),
         read: true,
-      }
-      addMessage(message)
-      idbAddMessage(message)
+      } as ChatMessage
       wsSendMessage?.(message)
       setPreviewImage(null, null)
     },
-    [addMessage, wsSendMessage, setPreviewImage]
+    [wsSendMessage, setPreviewImage]
+  )
+
+  const handleRetry = useCallback(
+    (message: ChatMessage) => {
+      updateMessageStatus(message.id, 'sending')
+      idbUpdateMessageStatus(message.id, 'sending')
+      wsSendMessage?.(message)
+    },
+    [updateMessageStatus, wsSendMessage]
   )
 
   const handleImageSelect = useCallback(
@@ -147,7 +152,7 @@ export function ChatWindow() {
       </div>
 
       <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <MessageList onImageClick={(src) => setPreviewImage(src, 'view')} />
+        <MessageList onImageClick={(src) => setPreviewImage(src, 'view')} onRetry={handleRetry} />
 
         {previewImageSrc && previewImageMode && (
           <ImagePreview

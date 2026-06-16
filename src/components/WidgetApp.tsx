@@ -4,6 +4,7 @@ import { useWebSocket } from '../hooks/useWebSocket'
 import { useIndexedDB } from '../hooks/useIndexedDB'
 import { BubbleButton } from './BubbleButton'
 import { ChatWindow } from './ChatWindow'
+import { markMessagesAsRead, getUnreadCount } from '../utils/idb'
 
 export function WidgetApp() {
   const setOpen = useWidgetStore((s) => s.setOpen)
@@ -18,11 +19,18 @@ export function WidgetApp() {
     setWsSendMessage(() => sendMessage)
   }, [sendMessage, setWsSendMessage])
 
-  const handleBubbleClick = () => {
+  const handleBubbleClick = async () => {
     setOpen(true)
     clearUnread()
     markAllAsRead()
+    await markMessagesAsRead('agent')
   }
+
+  useEffect(() => {
+    getUnreadCount().then((count) => {
+      useWidgetStore.getState().setUnreadCount(count)
+    })
+  }, [])
 
   return (
     <>

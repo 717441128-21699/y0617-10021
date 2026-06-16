@@ -51,6 +51,11 @@ export function getWidgetCSS(themeColor: string): string {
       40% { transform: scale(1); opacity: 1; }
     }
 
+    @keyframes cw-rotate {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
     .cw-bubble {
       animation: cw-bubble-pulse 2.5s ease-in-out infinite;
     }

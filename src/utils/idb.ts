@@ -1,22 +1,31 @@
 import { openDB, type IDBPDatabase } from 'idb'
-import type { ChatMessage } from '../types'
+import type { ChatMessage, MessageStatus } from '../types'
 
 const DB_NAME = 'chat_widget_db'
-const DB_VERSION = 1
+const DB_VERSION = 2
 
 let dbPromise: Promise<IDBPDatabase> | null = null
 
 function getDB(): Promise<IDBPDatabase> {
   if (!dbPromise) {
     dbPromise = openDB(DB_NAME, DB_VERSION, {
-      upgrade(db) {
-        if (!db.objectStoreNames.contains('messages')) {
-          const msgStore = db.createObjectStore('messages', { keyPath: 'id' })
-          msgStore.createIndex('timestamp', 'timestamp')
-          msgStore.createIndex('sender', 'sender')
+      upgrade(db, oldVersion, newVersion, transaction) {
+        if (oldVersion < 1) {
+          if (!db.objectStoreNames.contains('messages')) {
+            const msgStore = db.createObjectStore('messages', { keyPath: 'id' })
+            msgStore.createIndex('timestamp', 'timestamp')
+            msgStore.createIndex('sender', 'sender')
+            msgStore.createIndex('status', 'status')
+          }
+          if (!db.objectStoreNames.contains('widget_state')) {
+            db.createObjectStore('widget_state', { keyPath: 'key' })
+          }
         }
-        if (!db.objectStoreNames.contains('widget_state')) {
-          db.createObjectStore('widget_state', { keyPath: 'key' })
+        if (oldVersion < 2 && db.objectStoreNames.contains('messages')) {
+          const store = transaction.objectStore('messages')
+          if (!store.indexNames.contains('status')) {
+            store.createIndex('status', 'status')
+          }
         }
       },
     })
@@ -27,12 +36,33 @@ function getDB(): Promise<IDBPDatabase> {
 export async function getAllMessages(): Promise<ChatMessage[]> {
   const db = await getDB()
   const messages = await db.getAllFromIndex('messages', 'timestamp')
-  return messages
+  return messages.map((m) => ({
+    ...m,
+    status: m.status || (m.sender === 'visitor' ? 'sent' : 'sent'),
+  }))
+}
+
+export async function getPendingMessages(): Promise<ChatMessage[]> {
+  const db = await getDB()
+  const messages = await db.getAllFromIndex('messages', 'status', 'sending')
+  const failed = await db.getAllFromIndex('messages', 'status', 'failed')
+  return [...messages, ...failed].sort((a, b) => a.timestamp - b.timestamp)
 }
 
 export async function addMessage(message: ChatMessage): Promise<void> {
   const db = await getDB()
   await db.put('messages', message)
+}
+
+export async function updateMessageStatus(id: string, status: MessageStatus): Promise<void> {
+  const db = await getDB()
+  const tx = db.transaction('messages', 'readwrite')
+  const msg = await tx.store.get(id)
+  if (msg) {
+    msg.status = status
+    await tx.store.put(msg)
+  }
+  await tx.done
 }
 
 export async function markMessagesAsRead(sender: string): Promise<void> {

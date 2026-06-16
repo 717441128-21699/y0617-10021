@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { ChatMessage, ConnectionStatus, WidgetConfig } from '../types'
+import type { ChatMessage, ConnectionStatus, MessageStatus, WidgetConfig } from '../types'
 import { mergeConfig } from '../utils/config'
 
 export type ImagePreviewMode = 'send' | 'view' | null
@@ -17,6 +17,7 @@ interface WidgetState {
   setConfig: (config: WidgetConfig) => void
   setMessages: (messages: ChatMessage[]) => void
   addMessage: (message: ChatMessage) => void
+  updateMessageStatus: (id: string, status: MessageStatus) => void
   setOpen: (open: boolean) => void
   setUnreadCount: (count: number) => void
   incrementUnread: () => void
@@ -45,6 +46,13 @@ export const useWidgetStore = create<WidgetState>((set) => ({
 
   addMessage: (message) =>
     set((state) => ({ messages: [...state.messages, message] })),
+
+  updateMessageStatus: (id, status) =>
+    set((state) => ({
+      messages: state.messages.map((m) =>
+        m.id === id ? { ...m, status } : m
+      ),
+    })),
 
   setOpen: (open) =>
     set({ isOpen: open }),

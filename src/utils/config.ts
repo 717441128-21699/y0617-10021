@@ -6,10 +6,21 @@ export const DEFAULT_CONFIG: Required<WidgetConfig> = {
   position: 'right',
   welcomeMessage: '你好！有什么可以帮助你的吗？',
   agentName: '在线客服',
+  visitorId: '',
+  visitorName: '访客',
 }
 
 export function mergeConfig(config: WidgetConfig): Required<WidgetConfig> {
-  return { ...DEFAULT_CONFIG, ...config }
+  const visitorId = config.visitorId || generateVisitorId()
+  return { ...DEFAULT_CONFIG, ...config, visitorId }
+}
+
+function generateVisitorId(): string {
+  const existing = localStorage.getItem('cw_visitor_id')
+  if (existing) return existing
+  const newId = 'v_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8)
+  localStorage.setItem('cw_visitor_id', newId)
+  return newId
 }
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } | null {

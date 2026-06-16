@@ -10,6 +10,8 @@ const config = {
   position: 'right' as const,
   welcomeMessage: '你好！有什么可以帮助你的吗？',
   agentName: '在线客服',
+  visitorId: 'dev_visitor_' + Math.random().toString(36).slice(2, 8),
+  visitorName: '开发测试用户',
 }
 
 const store = useWidgetStore.getState()

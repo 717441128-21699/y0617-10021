@@ -38,6 +38,14 @@
         border-radius: 4px;
         font-size: 14px;
       }
+      .demo-content ul {
+        text-align: left;
+        background: rgba(255,255,255,0.1);
+        padding: 20px 20px 20px 40px;
+        border-radius: 12px;
+        margin-top: 20px;
+        line-height: 1.8;
+      }
     </style>
   </head>
   <body>
@@ -46,6 +54,12 @@
       <p>这是一个模拟的宿主网站页面。点击右下角的聊天气泡按钮即可打开客服 Widget。</p>
       <p>Widget 通过 <code>&lt;script&gt;</code> 标签引入，使用 Shadow DOM 隔离样式，支持文字和图片消息发送，消息通过 IndexedDB 持久化存储。</p>
       <p>WebSocket 连接到 <code>ws://localhost:8080</code>，连接状态会在聊天窗口头部实时显示。</p>
+      <ul>
+        <li><strong>会话信息</strong>：visitorId 自动生成并持久化，visitorName 可自定义</li>
+        <li><strong>消息补发</strong>：断网时消息显示「待发送」，恢复后自动补发</li>
+        <li><strong>历史记录</strong>：刷新页面后聊天记录和未读状态正确保留</li>
+        <li><strong>消息状态</strong>：发送中 ⟳ / 已发送 ✓ / 失败 ⚠ (点击重试)</li>
+      </ul>
     </div>
     <script src="/dist/chat-widget.js"></script>
     <script>
@@ -54,7 +68,9 @@
         themeColor: '#4F46E5',
         position: 'right',
         welcomeMessage: '你好！有什么可以帮助你的吗？',
-        agentName: '在线客服'
+        agentName: '在线客服',
+        visitorId: 'demo_visitor_' + Math.random().toString(36).slice(2, 8),
+        visitorName: '测试用户'
       });
     </script>
   </body>
