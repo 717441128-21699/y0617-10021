@@ -46,6 +46,7 @@
       padding: 8px 20px;
       border-bottom: 1px solid #374151;
       flex-wrap: wrap;
+      position: relative;
     }
     .filter-btn {
       padding: 4px 10px;
@@ -59,6 +60,34 @@
     }
     .filter-btn:hover { border-color: #6366f1; color: #c7d2fe; }
     .filter-btn.active { background: #4f46e5; border-color: #4f46e5; color: white; }
+    .tag-filter-wrap {
+      position: relative;
+      display: inline-block;
+    }
+    .tag-dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      background: #374151;
+      border: 1px solid #4b5563;
+      border-radius: 6px;
+      padding: 6px 0;
+      min-width: 140px;
+      z-index: 100;
+      display: none;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .tag-dropdown.show { display: block; }
+    .tag-dropdown-item {
+      padding: 6px 12px;
+      font-size: 12px;
+      color: #d1d5db;
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    .tag-dropdown-item:hover { background: #4b5563; }
+    .tag-dropdown-item.active { color: #a5b4fc; font-weight: 600; }
     .visitor-list {
       flex: 1;
       overflow-y: auto;
@@ -132,6 +161,33 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
+    .visitor-item-right {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4px;
+    }
+    .unreplied-badge {
+      background: #ef4444;
+      color: white;
+      font-size: 10px;
+      font-weight: 600;
+      min-width: 18px;
+      height: 18px;
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 5px;
+    }
+    .claimed-indicator {
+      font-size: 9px;
+      color: #f59e0b;
+      max-width: 70px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
     .controls {
       padding: 12px 20px;
       border-top: 1px solid #374151;
@@ -172,12 +228,15 @@
       border-bottom: 1px solid #c7d2fe;
       color: #4338ca;
       font-size: 12px;
+    }
+    .preview-row {
       display: flex;
       align-items: center;
       gap: 16px;
       flex-wrap: wrap;
+      padding: 8px 0;
     }
-    .visitor-preview p { padding: 8px 0; }
+    .preview-row p { padding: 0; }
     .session-status-select {
       padding: 4px 8px;
       border: 1px solid #c7d2fe;
@@ -187,6 +246,93 @@
       font-size: 12px;
       cursor: pointer;
       outline: none;
+    }
+    .claim-btn {
+      padding: 4px 12px;
+      border: 1px solid #c7d2fe;
+      border-radius: 4px;
+      background: white;
+      color: #4338ca;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .claim-btn:hover { background: #4f46e5; color: white; }
+    .claim-btn.release { background: #f59e0b; color: white; border-color: #f59e0b; }
+    .claim-btn.release:hover { background: #d97706; }
+    .claimed-by-info {
+      font-size: 11px;
+      color: #6366f1;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .claimed-warning {
+      font-size: 11px;
+      color: #ef4444;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: #fef2f2;
+      padding: 2px 8px;
+      border-radius: 4px;
+      border: 1px solid #fecaca;
+    }
+    .preview-section {
+      padding: 6px 0;
+      border-top: 1px solid #c7d2fe;
+    }
+    .preview-section:first-of-type {
+      border-top: none;
+    }
+    .preview-section-label {
+      font-size: 10px;
+      color: #818cf8;
+      font-weight: 600;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .session-notes-textarea {
+      width: 100%;
+      padding: 6px 10px;
+      border: 1px solid #c7d2fe;
+      border-radius: 4px;
+      background: white;
+      color: #312e81;
+      font-size: 12px;
+      font-family: inherit;
+      resize: vertical;
+      min-height: 50px;
+      max-height: 120px;
+      outline: none;
+    }
+    .session-notes-textarea::placeholder { color: #a5b4fc; }
+    .session-notes-textarea:focus { border-color: #4f46e5; }
+    .session-tags-input {
+      width: 100%;
+      padding: 6px 10px;
+      border: 1px solid #c7d2fe;
+      border-radius: 4px;
+      background: white;
+      color: #312e81;
+      font-size: 12px;
+      outline: none;
+    }
+    .session-tags-input::placeholder { color: #a5b4fc; }
+    .session-tags-input:focus { border-color: #4f46e5; }
+    .tags-display {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 4px;
+    }
+    .tag-chip {
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: 3px;
+      background: #c7d2fe;
+      color: #312e81;
     }
     .chat-area {
       flex: 1;
@@ -290,6 +436,10 @@
       <button class="filter-btn" data-filter="pending">待处理</button>
       <button class="filter-btn" data-filter="in_progress">跟进中</button>
       <button class="filter-btn" data-filter="resolved">已解决</button>
+      <div class="tag-filter-wrap">
+        <button class="filter-btn" id="tagFilterBtn" data-filter="tag">按标签</button>
+        <div class="tag-dropdown" id="tagDropdown"></div>
+      </div>
     </div>
     <div class="visitor-list" id="visitorList">
       <div class="no-results">暂无访客</div>
@@ -308,13 +458,27 @@
       </div>
     </div>
     <div class="visitor-preview" id="visitorPreview" style="display: none;">
-      <p>访客：<span id="visitorInfo"></span></p>
-      <p>状态：<span id="visitorStatus"></span></p>
-      <p>会话：<select class="session-status-select" id="sessionStatusSelect">
-        <option value="pending">待处理</option>
-        <option value="in_progress">跟进中</option>
-        <option value="resolved">已解决</option>
-      </select></p>
+      <div class="preview-row">
+        <p>访客：<span id="visitorInfo"></span></p>
+        <p>状态：<span id="visitorStatus"></span></p>
+        <p>会话：<select class="session-status-select" id="sessionStatusSelect">
+          <option value="pending">待处理</option>
+          <option value="in_progress">跟进中</option>
+          <option value="resolved">已解决</option>
+        </select></p>
+        <span class="claimed-by-info" id="claimedByInfo" style="display: none;"></span>
+        <span class="claimed-warning" id="claimedWarning" style="display: none;">⚠️ 被其他客服接手</span>
+        <button class="claim-btn" id="claimBtn" style="display: none;">接手</button>
+      </div>
+      <div class="preview-section">
+        <div class="preview-section-label">内部备注</div>
+        <textarea class="session-notes-textarea" id="sessionNotes" placeholder="添加内部备注..."></textarea>
+      </div>
+      <div class="preview-section">
+        <div class="preview-section-label">标签</div>
+        <input type="text" class="session-tags-input" id="sessionTags" placeholder="输入标签，用逗号分隔..." />
+        <div class="tags-display" id="tagsDisplay"></div>
+      </div>
     </div>
     <div class="chat-area">
       <div class="message-list" id="messageList">
@@ -335,7 +499,12 @@
     let autoReplyEnabled = true;
     let typingTimeout = null;
     let currentFilter = 'all';
+    let selectedTagFilter = null;
     let searchQuery = '';
+    let myAgentId = null;
+    let myAgentName = null;
+    let noteSaveTimeout = null;
+    let tagsSaveTimeout = null;
 
     const visitorListEl = document.getElementById('visitorList');
     const messageListEl = document.getElementById('messageList');
@@ -351,6 +520,14 @@
     const typingIndicatorEl = document.getElementById('typingIndicator');
     const sessionStatusSelectEl = document.getElementById('sessionStatusSelect');
     const searchBoxEl = document.getElementById('searchBox');
+    const tagFilterBtnEl = document.getElementById('tagFilterBtn');
+    const tagDropdownEl = document.getElementById('tagDropdown');
+    const sessionNotesEl = document.getElementById('sessionNotes');
+    const sessionTagsEl = document.getElementById('sessionTags');
+    const tagsDisplayEl = document.getElementById('tagsDisplay');
+    const claimBtnEl = document.getElementById('claimBtn');
+    const claimedByInfoEl = document.getElementById('claimedByInfo');
+    const claimedWarningEl = document.getElementById('claimedWarning');
 
     ws.onopen = () => {
       statusDotEl.className = 'status-dot';
@@ -366,7 +543,10 @@
       const data = JSON.parse(event.data);
 
       if (data.action === 'init') {
-        const visitorList = data.payload.visitors;
+        const payload = data.payload;
+        myAgentId = payload.agentId || null;
+        myAgentName = payload.agentName || null;
+        const visitorList = payload.visitors;
         visitorList.forEach(v => {
           visitors.set(v.visitorId, {
             name: v.visitorName,
@@ -374,9 +554,15 @@
             lastSeen: v.lastSeen || 0,
             messages: v.messages || [],
             sessionStatus: v.sessionStatus || 'pending',
+            note: v.note || '',
+            tags: v.tags || [],
+            claimedBy: v.claimedBy || null,
+            claimedByName: v.claimedByName || null,
+            unrepliedCount: v.unrepliedCount || 0,
           });
         });
         renderVisitorList();
+        renderTagDropdown();
       } else if (data.action === 'message') {
         const msg = data.payload;
         const visitorId = msg.visitorId;
@@ -388,6 +574,11 @@
             lastSeen: Date.now(),
             messages: [],
             sessionStatus: 'pending',
+            note: '',
+            tags: [],
+            claimedBy: null,
+            claimedByName: null,
+            unrepliedCount: 0,
           });
         }
 
@@ -396,6 +587,9 @@
           visitor.messages.push(msg);
         }
         visitor.lastSeen = Date.now();
+        if (typeof msg.unrepliedCount === 'number') {
+          visitor.unrepliedCount = msg.unrepliedCount;
+        }
         renderVisitorList();
 
         if (visitorId === currentVisitorId) {
@@ -416,6 +610,11 @@
             lastSeen: Date.now(),
             messages: [],
             sessionStatus: payload.sessionStatus || 'pending',
+            note: '',
+            tags: [],
+            claimedBy: null,
+            claimedByName: null,
+            unrepliedCount: 0,
           });
         }
         renderVisitorList();
@@ -441,6 +640,35 @@
         if (visitorId === currentVisitorId) {
           sessionStatusSelectEl.value = sessionStatus;
         }
+      } else if (data.action === 'session_note') {
+        const { visitorId, note } = data.payload;
+        if (visitors.has(visitorId)) {
+          visitors.get(visitorId).note = note;
+        }
+        if (visitorId === currentVisitorId) {
+          sessionNotesEl.value = note;
+        }
+      } else if (data.action === 'session_tags') {
+        const { visitorId, tags } = data.payload;
+        if (visitors.has(visitorId)) {
+          visitors.get(visitorId).tags = tags;
+        }
+        renderTagDropdown();
+        renderVisitorList();
+        if (visitorId === currentVisitorId) {
+          sessionTagsEl.value = tags.join(', ');
+          renderTagsChips(tags);
+        }
+      } else if (data.action === 'session_claim_update') {
+        const { visitorId, claimedBy, claimedByName } = data.payload;
+        if (visitors.has(visitorId)) {
+          visitors.get(visitorId).claimedBy = claimedBy;
+          visitors.get(visitorId).claimedByName = claimedByName;
+        }
+        renderVisitorList();
+        if (visitorId === currentVisitorId) {
+          updateClaimUI();
+        }
       } else if (data.action === 'typing_start') {
         const visitorId = data.payload.visitorId;
         if (visitorId === currentVisitorId) {
@@ -459,9 +687,7 @@
     };
 
     function isUnreplied(visitor) {
-      if (visitor.messages.length === 0) return false;
-      const lastMsg = visitor.messages[visitor.messages.length - 1];
-      return lastMsg.sender === 'visitor';
+      return visitor.unrepliedCount > 0;
     }
 
     function matchesSearch(visitor, id) {
@@ -482,8 +708,43 @@
         case 'pending': return visitor.sessionStatus === 'pending';
         case 'in_progress': return visitor.sessionStatus === 'in_progress';
         case 'resolved': return visitor.sessionStatus === 'resolved';
+        case 'tag': return selectedTagFilter ? visitor.tags.includes(selectedTagFilter) : true;
         default: return true;
       }
+    }
+
+    function getAllTags() {
+      const tagSet = new Set();
+      visitors.forEach(v => {
+        (v.tags || []).forEach(t => tagSet.add(t));
+      });
+      return Array.from(tagSet).sort();
+    }
+
+    function renderTagDropdown() {
+      const tags = getAllTags();
+      if (tags.length === 0) {
+        tagDropdownEl.innerHTML = '<div class="tag-dropdown-item" style="color: #6b7280; cursor: default;">暂无标签</div>';
+        return;
+      }
+      tagDropdownEl.innerHTML = '<div class="tag-dropdown-item' + (!selectedTagFilter ? ' active' : '') + '" data-tag="">全部标签</div>' +
+        tags.map(t =>
+          '<div class="tag-dropdown-item' + (selectedTagFilter === t ? ' active' : '') + '" data-tag="' + escapeHtml(t) + '">' + escapeHtml(t) + '</div>'
+        ).join('');
+
+      tagDropdownEl.querySelectorAll('.tag-dropdown-item[data-tag]').forEach(item => {
+        item.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const tag = item.dataset.tag;
+          selectedTagFilter = tag || null;
+          currentFilter = 'tag';
+          document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+          tagFilterBtnEl.classList.add('active');
+          tagDropdownEl.classList.remove('show');
+          renderVisitorList();
+          renderTagDropdown();
+        });
+      });
     }
 
     function renderVisitorList() {
@@ -513,6 +774,8 @@
           : '暂无消息';
         const initial = (v.name || '访').charAt(0);
         const statusLabel = { pending: '待处理', in_progress: '跟进中', resolved: '已解决' }[v.sessionStatus] || '待处理';
+        const showBadge = v.unrepliedCount > 0;
+        const isClaimedByOther = v.claimedBy && v.claimedBy !== myAgentId;
 
         return `
           <div class="visitor-item ${id === currentVisitorId ? 'active' : ''}" data-id="${id}">
@@ -528,6 +791,10 @@
               </div>
               <div class="visitor-last-msg">${escapeHtml(lastMsgText)}</div>
               <div class="visitor-id-preview">${escapeHtml(id)}</div>
+            </div>
+            <div class="visitor-item-right">
+              ${showBadge ? '<span class="unreplied-badge">' + v.unrepliedCount + '</span>' : ''}
+              ${isClaimedByOther ? '<span class="claimed-indicator" title="已被 ' + escapeHtml(v.claimedByName || v.claimedBy) + ' 接手">🔒 ' + escapeHtml(v.claimedByName || '') + '</span>' : ''}
             </div>
           </div>
         `;
@@ -547,12 +814,23 @@
         chatTitleEl.textContent = `对话：${visitor.name}`;
         visitorInfoEl.textContent = `${visitor.name} (ID: ${id})`;
         sessionStatusSelectEl.value = visitor.sessionStatus || 'pending';
-        visitorPreviewEl.style.display = 'flex';
+        sessionNotesEl.value = visitor.note || '';
+        sessionTagsEl.value = (visitor.tags || []).join(', ');
+        renderTagsChips(visitor.tags || []);
+        visitorPreviewEl.style.display = 'block';
         messageInputEl.disabled = false;
         sendBtnEl.disabled = false;
         updateVisitorStatus();
+        updateClaimUI();
         renderVisitorList();
         renderMessages();
+
+        ws.send(JSON.stringify({
+          action: 'session_mark_viewed',
+          payload: { visitorId: id },
+        }));
+        visitor.unrepliedCount = 0;
+        renderVisitorList();
       }
     }
 
@@ -563,6 +841,41 @@
         const lastSeen = visitor.lastSeen ? new Date(visitor.lastSeen).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '';
         visitorStatusEl.textContent = visitor.online ? '🟢 在线' : `⚫ 离线 (最后活跃: ${lastSeen})`;
       }
+    }
+
+    function updateClaimUI() {
+      if (!currentVisitorId) return;
+      const visitor = visitors.get(currentVisitorId);
+      if (!visitor) return;
+
+      claimBtnEl.style.display = 'inline-block';
+
+      if (visitor.claimedBy && visitor.claimedBy === myAgentId) {
+        claimBtnEl.textContent = '释放';
+        claimBtnEl.className = 'claim-btn release';
+        claimedByInfoEl.textContent = '✋ 你已接手';
+        claimedByInfoEl.style.display = 'inline';
+        claimedWarningEl.style.display = 'none';
+      } else if (visitor.claimedBy && visitor.claimedBy !== myAgentId) {
+        claimBtnEl.textContent = '接手';
+        claimBtnEl.className = 'claim-btn';
+        claimedByInfoEl.textContent = '🔒 ' + (visitor.claimedByName || visitor.claimedBy);
+        claimedByInfoEl.style.display = 'inline';
+        claimedWarningEl.style.display = 'inline';
+      } else {
+        claimBtnEl.textContent = '接手';
+        claimBtnEl.className = 'claim-btn';
+        claimedByInfoEl.style.display = 'none';
+        claimedWarningEl.style.display = 'none';
+      }
+    }
+
+    function renderTagsChips(tags) {
+      if (!tags || tags.length === 0) {
+        tagsDisplayEl.innerHTML = '';
+        return;
+      }
+      tagsDisplayEl.innerHTML = tags.map(t => '<span class="tag-chip">' + escapeHtml(t) + '</span>').join('');
     }
 
     function renderMessages() {
@@ -666,6 +979,46 @@
       renderVisitorList();
     });
 
+    sessionNotesEl.addEventListener('input', () => {
+      if (!currentVisitorId) return;
+      if (noteSaveTimeout) clearTimeout(noteSaveTimeout);
+      noteSaveTimeout = setTimeout(() => {
+        const note = sessionNotesEl.value;
+        visitors.get(currentVisitorId).note = note;
+        ws.send(JSON.stringify({
+          action: 'session_note_update',
+          payload: { visitorId: currentVisitorId, note },
+        }));
+      }, 500);
+    });
+
+    sessionTagsEl.addEventListener('input', () => {
+      if (!currentVisitorId) return;
+      if (tagsSaveTimeout) clearTimeout(tagsSaveTimeout);
+      tagsSaveTimeout = setTimeout(() => {
+        const tagsRaw = sessionTagsEl.value;
+        const tags = tagsRaw.split(/[,，]/).map(t => t.trim()).filter(t => t.length > 0);
+        visitors.get(currentVisitorId).tags = tags;
+        renderTagsChips(tags);
+        ws.send(JSON.stringify({
+          action: 'session_tags_update',
+          payload: { visitorId: currentVisitorId, tags },
+        }));
+      }, 500);
+    });
+
+    claimBtnEl.addEventListener('click', () => {
+      if (!currentVisitorId) return;
+      const visitor = visitors.get(currentVisitorId);
+      if (!visitor) return;
+
+      const action = (visitor.claimedBy === myAgentId) ? 'release' : 'claim';
+      ws.send(JSON.stringify({
+        action: 'session_claim',
+        payload: { visitorId: currentVisitorId, action },
+      }));
+    });
+
     autoReplyToggleEl.addEventListener('click', () => {
       autoReplyEnabled = !autoReplyEnabled;
       updateAutoReplyBtn();
@@ -684,13 +1037,29 @@
       renderVisitorList();
     });
 
-    document.querySelectorAll('.filter-btn').forEach(btn => {
+    document.querySelectorAll('.filter-btn:not(#tagFilterBtn)').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         currentFilter = btn.dataset.filter;
+        selectedTagFilter = null;
+        tagDropdownEl.classList.remove('show');
         renderVisitorList();
+        renderTagDropdown();
       });
+    });
+
+    tagFilterBtnEl.addEventListener('click', (e) => {
+      e.stopPropagation();
+      tagDropdownEl.classList.toggle('show');
+    });
+
+    document.addEventListener('click', () => {
+      tagDropdownEl.classList.remove('show');
+    });
+
+    tagDropdownEl.addEventListener('click', (e) => {
+      e.stopPropagation();
     });
 
     function escapeHtml(text) {

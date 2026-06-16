@@ -51,7 +51,20 @@ export const useWidgetStore = create<WidgetState>((set) => ({
     set({ messages }),
 
   addMessage: (message) =>
-    set((state) => ({ messages: [...state.messages, message] })),
+    set((state) => {
+      if (state.messages.some((m) => m.id === message.id)) {
+        return {
+          messages: state.messages
+            .map((m) => (m.id === message.id ? message : m))
+            .sort((a, b) => a.timestamp - b.timestamp),
+        }
+      }
+      return {
+        messages: [...state.messages, message].sort(
+          (a, b) => a.timestamp - b.timestamp
+        ),
+      }
+    }),
 
   updateMessageStatus: (id, status) =>
     set((state) => ({

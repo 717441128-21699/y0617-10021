@@ -41,7 +41,52 @@ export interface SessionHistoryPayload {
   lastMessageId?: string
 }
 
+export interface SessionNotePayload {
+  visitorId: string
+  note: string
+}
+
+export interface SessionTagsPayload {
+  visitorId: string
+  tags: string[]
+}
+
+export interface SessionClaimPayload {
+  visitorId: string
+  agentId: string
+  agentName: string
+  action: 'claim' | 'release'
+}
+
 export interface WSMessage {
-  action: 'message' | 'agent_joined' | 'agent_left' | 'send_message' | 'message_ack' | 'typing_start' | 'typing_stop' | 'visitor_online' | 'visitor_offline' | 'session_history' | 'session_status_update' | 'session_status'
-  payload: ChatMessage | { messageId: string } | TypingPayload | { visitorId: string; visitorName: string; online: boolean; lastMessage?: ChatMessage } | SessionHistoryPayload | SessionStatusPayload | { visitorId: string; visitorName: string; online: boolean; sessionStatus: SessionStatus }
+  action:
+    | 'message'
+    | 'agent_joined'
+    | 'agent_left'
+    | 'send_message'
+    | 'message_ack'
+    | 'typing_start'
+    | 'typing_stop'
+    | 'visitor_online'
+    | 'visitor_offline'
+    | 'session_history'
+    | 'session_status_update'
+    | 'session_status'
+    | 'session_note_update'
+    | 'session_note'
+    | 'session_tags_update'
+    | 'session_tags'
+    | 'session_claim'
+    | 'session_claim_update'
+  payload:
+    | ChatMessage
+    | { messageId: string }
+    | TypingPayload
+    | { visitorId: string; visitorName: string; online: boolean; lastMessage?: ChatMessage }
+    | SessionHistoryPayload
+    | SessionStatusPayload
+    | SessionNotePayload
+    | SessionTagsPayload
+    | SessionClaimPayload
+    | { visitorId: string; claimedBy: string | null; claimedByName: string | null }
 }

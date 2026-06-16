@@ -19,10 +19,16 @@ interface VisitorSession {
   messages: any[]
   sessionStatus: SessionStatus
   messageIds: Set<string>
+  note: string
+  tags: string[]
+  claimedBy: string | null
+  claimedByName: string | null
 }
 
 interface Agent {
   ws: WebSocket
+  agentId: string
+  agentName: string
 }
 
 const sessions = new Map<string, VisitorSession>()
@@ -60,19 +66,27 @@ server.on('upgrade', (request, socket, head) => {
 wss.on('connection', (ws, request) => {
   const url = new URL(request.url || '', `http://${request.headers.host}`)
   const role = url.searchParams.get('role')
+  const agentId = url.searchParams.get('agentId') || generateAgentId()
+  const agentName = url.searchParams.get('agentName') || `客服${agents.length + 1}`
 
   if (role === 'agent') {
-    handleAgentConnection(ws)
+    handleAgentConnection(ws, agentId, agentName)
   } else {
     handleVisitorConnection(ws)
   }
 })
 
-function handleAgentConnection(ws: WebSocket) {
-  console.log('客服已连接')
-  agents.push({ ws })
+function getUnrepliedCount(session: VisitorSession): number {
+  let count = 0
+  for (let i = session.messages.length - 1; i >= 0; i--) {
+    if (session.messages[i].sender === 'agent') break
+    if (session.messages[i].sender === 'visitor') count++
+  }
+  return count
+}
 
-  const visitorList = Array.from(sessions.values()).map((s) => ({
+function serializeSession(s: VisitorSession) {
+  return {
     visitorId: s.visitorId,
     visitorName: s.visitorName,
     online: s.online,
@@ -80,11 +94,25 @@ function handleAgentConnection(ws: WebSocket) {
     messages: s.messages,
     lastMessage: s.messages.length > 0 ? s.messages[s.messages.length - 1] : null,
     sessionStatus: s.sessionStatus,
-  }))
+    note: s.note,
+    tags: s.tags,
+    claimedBy: s.claimedBy,
+    claimedByName: s.claimedByName,
+    unrepliedCount: getUnrepliedCount(s),
+  }
+}
+
+function handleAgentConnection(ws: WebSocket, agentId: string, agentName: string) {
+  console.log(`客服[${agentName}(${agentId})]已连接`)
+  agents.push({ ws, agentId, agentName })
 
   ws.send(JSON.stringify({
     action: 'init',
-    payload: { visitors: visitorList },
+    payload: {
+      visitors: Array.from(sessions.values()).map(serializeSession),
+      agentId,
+      agentName,
+    },
   }))
 
   ws.on('message', (data) => {
@@ -117,7 +145,7 @@ function handleAgentConnection(ws: WebSocket) {
 
           broadcastToAgents({
             action: 'message',
-            payload: { ...chatMsg, visitorId, visitorName: session.visitorName },
+            payload: { ...chatMsg, visitorId, visitorName: session.visitorName, unrepliedCount: getUnrepliedCount(session) },
           }, ws)
         }
       } else if (msg.action === 'session_status_update' && msg.payload) {
@@ -130,6 +158,48 @@ function handleAgentConnection(ws: WebSocket) {
             payload: { visitorId, sessionStatus },
           }, ws)
         }
+      } else if (msg.action === 'session_note_update' && msg.payload) {
+        const { visitorId, note } = msg.payload
+        const session = sessions.get(visitorId)
+        if (session) {
+          session.note = note
+          broadcastToAgents({
+            action: 'session_note',
+            payload: { visitorId, note },
+          }, ws)
+        }
+      } else if (msg.action === 'session_tags_update' && msg.payload) {
+        const { visitorId, tags } = msg.payload
+        const session = sessions.get(visitorId)
+        if (session) {
+          session.tags = tags
+          broadcastToAgents({
+            action: 'session_tags',
+            payload: { visitorId, tags },
+          }, ws)
+        }
+      } else if (msg.action === 'session_claim' && msg.payload) {
+        const { visitorId, action: claimAction } = msg.payload
+        const session = sessions.get(visitorId)
+        if (session) {
+          if (claimAction === 'claim') {
+            session.claimedBy = agentId
+            session.claimedByName = agentName
+          } else {
+            session.claimedBy = null
+            session.claimedByName = null
+          }
+          broadcastToAgents({
+            action: 'session_claim_update',
+            payload: { visitorId, claimedBy: session.claimedBy, claimedByName: session.claimedByName },
+          })
+        }
+      } else if (msg.action === 'session_mark_viewed' && msg.payload) {
+        const { visitorId } = msg.payload
+        broadcastToAgents({
+          action: 'session_viewed',
+          payload: { visitorId, agentId },
+        }, ws)
       } else if (msg.action === 'typing_start' && msg.payload) {
         const { visitorId } = msg.payload
         const session = sessions.get(visitorId)
@@ -159,7 +229,7 @@ function handleAgentConnection(ws: WebSocket) {
 
   ws.on('close', () => {
     agents = agents.filter(a => a.ws !== ws)
-    console.log('客服已断开')
+    console.log(`客服[${agentName}]已断开`)
   })
 }
 
@@ -211,6 +281,10 @@ function handleVisitorConnection(ws: WebSocket) {
             messages: [],
             sessionStatus: 'pending',
             messageIds: new Set(),
+            note: '',
+            tags: [],
+            claimedBy: null,
+            claimedByName: null,
           }
           sessions.set(visitorId, session)
         }
@@ -223,6 +297,7 @@ function handleVisitorConnection(ws: WebSocket) {
             online: true,
             lastMessage: session.messages.length > 0 ? session.messages[session.messages.length - 1] : null,
             sessionStatus: session.sessionStatus,
+            unrepliedCount: getUnrepliedCount(session),
           },
         })
 
@@ -251,6 +326,10 @@ function handleVisitorConnection(ws: WebSocket) {
               messages: [],
               sessionStatus: 'pending',
               messageIds: new Set(),
+              note: '',
+              tags: [],
+              claimedBy: null,
+              claimedByName: null,
             })
           }
         }
@@ -276,7 +355,7 @@ function handleVisitorConnection(ws: WebSocket) {
 
         broadcastToAgents({
           action: 'message',
-          payload: { ...chatMsg, visitorId, visitorName },
+          payload: { ...chatMsg, visitorId, visitorName, unrepliedCount: session ? getUnrepliedCount(session) : 0 },
         })
 
         if (autoReplyEnabled && chatMsg.type === 'text') {
@@ -315,7 +394,7 @@ function handleVisitorConnection(ws: WebSocket) {
 
               broadcastToAgents({
                 action: 'message',
-                payload: { ...agentMsg, visitorId, visitorName },
+                payload: { ...agentMsg, visitorId, visitorName, unrepliedCount: session ? getUnrepliedCount(session) : 0 },
               })
 
               console.log(`自动回复访客[${visitorName}]:`, reply.substring(0, 50))
@@ -357,6 +436,12 @@ function generateId(): string {
   return 'msg_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8)
 }
 
+let agentCounter = 0
+function generateAgentId(): string {
+  agentCounter++
+  return 'agent_' + agentCounter
+}
+
 let autoReplyEnabled = true
 
 setInterval(() => {
@@ -382,4 +467,5 @@ server.listen(PORT, () => {
   console.log(`4. 断开服务器模拟断网，再重连查看自动补发`)
   console.log(`5. 客服输入时会发送 typing 事件，访客端显示输入提示`)
   console.log(`6. 可搜索/筛选访客，切换会话处理状态`)
+  console.log(`7. 可添加备注/标签，多客服协同接手/释放会话`)
 })
